@@ -9,6 +9,7 @@
 ## 目录 / Table of Contents
 
 - [概述 / Overview](#概述--overview)
+- [注意事项 / Notes](#%EF%B8%8F-注意事项)
 - [安装 / Installation](#安装--installation)
 - [架构 / Architecture](#架构--architecture)
 - [快速开始 / Quick Start](#快速开始--quick-start)
@@ -46,6 +47,14 @@ SVList is a production-grade virtual scroll list for Unity UGUI. It handles **1,
 | 纯 C# 核心逻辑 (可单元测试) / Pure-C# core | 已实现 / Done |
 | 瀑布流布局 / Masonry layout | 计划中 / Planned |
 | 单元测试 / Unit tests | 计划中 / Planned |
+
+## ⚠️ 注意事项
+
+本项目仍处于早期开发阶段，部分功能可能不完善或存在潜在问题。
+
+目前更适合用于学习、测试与二次开发参考，而非直接用于生产环境。
+
+后续版本会持续优化性能、稳定性以及功能完整性。
 
 ---
 
