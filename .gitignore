@@ -32,3 +32,8 @@ ProfilerCaptures/
 
 # Package Manager
 Packages/
+
+# Project notes (not for release)
+SVList_VS_UGUISV.md
+SVList.txt
+/SVList/
