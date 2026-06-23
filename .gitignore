@@ -34,6 +34,8 @@ ProfilerCaptures/
 Packages/
 !Packages/manifest.json
 !Packages/packages-lock.json
+!DevProject/Packages/manifest.json
+!DevProject/Packages/packages-lock.json
 
 # Project notes (not for release)
 SVList_VS_UGUISV.md
