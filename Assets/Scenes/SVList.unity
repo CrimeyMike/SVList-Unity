@@ -361,10 +361,10 @@ MonoBehaviour:
     MaxPoolSize: 50
     MaxInstantiatePerFrame: 5
     PreWarmCount: 20
-    Direction: 0
+    Direction: 2
     Reverse: 0
     GridColumnCount: 3
-    GridCellWidth: 100
+    GridCellWidth: 450
     GridCellHeight: 0
     GridHorizontalSpacing: 10
     GridVerticalSpacing: 10
@@ -394,6 +394,7 @@ MonoBehaviour:
       m_PostInfinity: 2
       m_RotationOrder: 4
     ShowGizmos: 1
+    ShowDetailedGizmos: 0
     ShowDebugPanel: 1
 --- !u!224 &390074362
 RectTransform:
