@@ -2,6 +2,14 @@
 
 All notable changes to SVList will be documented in this file.
 
+## [1.0.1] - 2025-06-23
+
+### Changed
+- Restructured repo to standard UPM package layout: `Runtime/` and `Editor/` moved to repo root
+- `package.json` now at repo root alongside `Runtime/`/`Editor/` — valid UPM git package
+- Demo project now references SVList as a local package via `Packages/manifest.json`
+- **Important**: Demo scene script references need re-linking after upgrade (one-time)
+
 ## [1.0.0] - 2025-06-23
 
 ### Added

@@ -9,6 +9,7 @@
 ## 目录 / Table of Contents
 
 - [概述 / Overview](#概述--overview)
+- [安装 / Installation](#安装--installation)
 - [架构 / Architecture](#架构--architecture)
 - [快速开始 / Quick Start](#快速开始--quick-start)
 - [配置参数 / Configuration](#配置参数--configuration)
@@ -45,6 +46,39 @@ SVList is a production-grade virtual scroll list for Unity UGUI. It handles **1,
 | 纯 C# 核心逻辑 (可单元测试) / Pure-C# core | 已实现 / Done |
 | 瀑布流布局 / Masonry layout | 计划中 / Planned |
 | 单元测试 / Unit tests | 计划中 / Planned |
+
+---
+
+## 安装 / Installation
+
+### UPM (Unity Package Manager)
+
+通过 Git URL 安装 / Install via Git URL:
+
+1. 打开 **Window > Package Manager**
+2. 点击 **+** > **Add package from git URL...**
+3. 输入 / Enter:
+
+```
+https://github.com/CrimeyMike/SVList-Unity.git
+```
+
+安装指定版本 / Install a specific version:
+
+```
+https://github.com/CrimeyMike/SVList-Unity.git#v1.0.0
+```
+
+### 手动安装 / Manual
+
+将仓库克隆到项目的 `Packages/` 目录下：
+
+Clone this repo into your project's `Packages/` folder:
+
+```bash
+cd YourProject/Packages
+git clone https://github.com/CrimeyMike/SVList-Unity.git com.svlist.unity
+```
 
 ---
 
@@ -351,29 +385,29 @@ Register your layout in `SVListCore.CreateLayout()`.
 ## 项目结构 / Project Structure
 
 ```
-Assets/
-  SVList/
-    Runtime/
-      Core/           SVListView.cs, SVListCore.cs, SVListState.cs, SVListStatus.cs
-      Layout/         ISVLayout.cs, SVVerticalLayout.cs, SVHorizontalLayout.cs, SVGridLayout.cs
-      Visible/        SVVisibleManager.cs, VisibleRange.cs, VisibleState.cs, DiffResult.cs
-      Height/         SVHeightCache.cs, SVFenwickTree.cs, HeightInfo.cs
-      Container/      SVItemContainer.cs, ActiveItem.cs, ItemState.cs
-      Pool/           SVObjectPoolManager.cs, SVPoolNode.cs
-      Scheduler/      SVInstantiateScheduler.cs, SVRecycleScheduler.cs, CreateRequest.cs, RecycleRequest.cs
-      Renderer/       ISVItemRenderer.cs, SVItemRendererBase.cs
-      Data/           ISVDataSource.cs
-      Controller/     SVScrollController.cs
-      Config/         SVConfig.cs
-      Debug/          DebugInfo.cs, SVProfiler.cs, SVDebugPanel.cs
-      Animation/      SVTweenScroll.cs
-      Utils/          SVUtils.cs
-    Editor/
-      SVListViewEditor.cs
-  Prefabs/            Demo 预制体
-  Scripts/
-    Core/             DemoInitializer.cs
-```
+package.json              UPM 包清单 / Package manifest
+Runtime/                  运行时代码 / Runtime code
+  Core/                   SVListView.cs, SVListCore.cs, SVListState.cs, SVListStatus.cs
+  Layout/                 ISVLayout.cs, SVVerticalLayout.cs, SVHorizontalLayout.cs, SVGridLayout.cs
+  Visible/                SVVisibleManager.cs, VisibleRange.cs, VisibleState.cs, DiffResult.cs
+  Height/                 SVHeightCache.cs, SVFenwickTree.cs, HeightInfo.cs
+  Container/              SVItemContainer.cs, ActiveItem.cs, ItemState.cs
+  Pool/                   SVObjectPoolManager.cs, SVPoolNode.cs
+  Scheduler/              SVInstantiateScheduler.cs, SVRecycleScheduler.cs, CreateRequest.cs, RecycleRequest.cs
+  Renderer/               ISVItemRenderer.cs, SVItemRendererBase.cs
+  Data/                   ISVDataSource.cs
+  Controller/             SVScrollController.cs
+  Config/                 SVConfig.cs
+  Debug/                  DebugInfo.cs, SVProfiler.cs, SVDebugPanel.cs
+  Animation/              SVTweenScroll.cs
+  Utils/                  SVUtils.cs
+Editor/                   编辑器扩展 / Editor extensions
+  SVListViewEditor.cs
+Tests/                    单元测试 (待实现) / Unit tests (planned)
+Assets/                   Demo 场景和资源 / Demo scenes & assets
+  Prefabs/                Demo 预制体
+  Scenes/                 Demo 场景
+  Scripts/                Demo 脚本```
 
 ---
 
@@ -397,7 +431,7 @@ MIT
 
 ## 贡献指南 / Contributing
 
-1. 先阅读 `Assets/SVList/Runtime/Core/SVListCore.cs` -- 它是所有子系统的调度中心。
+1. 先阅读 `Runtime/Core/SVListCore.cs` -- 它是所有子系统的调度中心。
 2. 核心逻辑必须保持纯 C# (不依赖 MonoBehaviour) -- 新功能应添加到 `SVListCore` 而非 `SVListView`。
 3. 所有新布局实现 `ISVLayout` 接口。
 4. 保持命名约定: 框架类型统一使用 `SV` 前缀。
