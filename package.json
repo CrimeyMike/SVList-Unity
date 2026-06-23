@@ -1,0 +1,24 @@
+{
+  "name": "com.svlist.unity",
+  "version": "1.0.0",
+  "displayName": "SVList",
+  "description": "High-performance UGUI virtual scroll list framework. Supports 1M+ items, dynamic height, vertical/horizontal/grid layouts, multi-template, zero-GC scrolling, and runtime-adjustable spacing.\n\n高性能 UGUI 虚拟滚动列表框架。支持百万级数据、动态高度、垂直/水平/网格布局、多模板、零GC滚动、运行时调整间距。",
+  "unity": "2020.3",
+  "documentationUrl": "https://github.com/CrimeyMike/SVList-Unity/blob/main/README.md",
+  "changelogUrl": "https://github.com/CrimeyMike/SVList-Unity/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/CrimeyMike/SVList-Unity/blob/main/LICENSE",
+  "keywords": [
+    "ugui",
+    "scroll",
+    "virtual-list",
+    "scrollrect",
+    "grid",
+    "backpack",
+    "performance",
+    "object-pool"
+  ],
+  "author": {
+    "name": "CrimeyMike",
+    "url": "https://github.com/CrimeyMike"
+  }
+}
