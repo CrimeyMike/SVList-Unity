@@ -66,7 +66,7 @@ https://github.com/CrimeyMike/SVList-Unity.git?path=/Assets/SVList
 安装指定版本 / Install a specific version:
 
 ```
-https://github.com/CrimeyMike/SVList-Unity.git?path=/Assets/SVList#v1.0.0
+https://github.com/CrimeyMike/SVList-Unity.git?path=/Assets/SVList#v1.0.1
 ```
 
 ### 手动安装 / Manual
