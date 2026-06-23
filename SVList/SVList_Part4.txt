@@ -1,0 +1,661 @@
+Part4 VisibleManager（可见区管理）
+4.1 问题本质
+
+假设：
+
+Viewport 高度：
+
+600
+
+每个 item：
+
+100
+
+屏幕能看到：
+
+6 个
+
+难道只创建 6 个？
+
+不能。
+
+因为：
+
+高速滑动：
+
+index 0~5
+
+↓
+
+突然
+
+50~55
+
+如果临时创建：
+
+一定白屏。
+
+所以：
+
+实际上需要：
+
+可见区
+
++
+
+上下 Buffer
+
+形成：
+
+真实可见
+
+6
+
++
+
+上Buffer 6
+
++
+
+下Buffer 6
+
+总共：
+
+18 个。
+
+滑动时复用。
+
+4.2 VisibleRange
+
+定义：
+
+struct VisibleRange
+{
+    public int First;
+    public int Last;
+}
+
+例如：
+
+Visible
+
+100~105
+
+Buffer：
+
+94~111
+
+真正 Active：
+
+94~111
+
+用户看到：
+
+100~105
+4.3 为什么需要 Buffer
+
+如果没有：
+
+100~105
+
+↓
+
+106~111
+
+下一帧：
+
+才创建：
+
+106
+
+107
+
+108
+
+...
+
+会出现：
+
+空白
+
+↓
+
+Item慢慢出现
+
+所以：
+
+提前一屏。
+
+推荐：
+
+BufferSize = viewportHeight
+
+上下各一屏。
+
+最终：
+
+viewport=600
+
+buffer=600
+
+active=1800
+
+非常平滑。
+
+4.4 VisibleManager职责
+
+输入：
+
+scrollOffset
+
+viewportSize
+
+bufferSize
+
+输出：
+
+VisibleRange
+
+接口：
+
+VisibleRange CalculateRange(
+    float scrollOffset
+);
+4.5 计算 FirstVisible
+
+动态高度：
+
+不能：
+
+scrollY/cellHeight
+
+必须：
+
+heightCache.FindIndexByOffset(scrollY-buffer)
+
+得到：
+
+firstIndex
+4.6 计算 LastVisible
+
+终点：
+
+endY=
+scrollOffset
++
+viewportSize
++
+buffer
+
+再：
+
+FindIndexByOffset(endY)
+
+得到：
+
+lastIndex。
+
+4.7 Clamp
+
+防止：
+
+scrollOffset<0
+
+导致：
+
+first=-5
+
+所以：
+
+first=max(0,first)
+
+last=min(count-1,last)
+4.8 为什么需要 PrevRange
+
+保存：
+
+PrevFirst
+
+PrevLast
+
+例如：
+
+上一帧：
+
+94~111
+
+这一帧：
+
+96~113
+
+Diff：
+
+新增：
+
+112
+113
+
+删除：
+
+94
+95
+
+只处理变化部分。
+
+而不是：
+
+整个：
+
+96~113
+
+全部重建。
+
+4.9 Diff算法
+
+输入：
+
+旧：
+
+10~20
+
+新：
+
+13~25
+
+删除：
+
+10
+11
+12
+
+新增：
+
+21
+22
+23
+24
+25
+
+复杂度：
+
+O(Δ)
+
+而不是：
+
+O(N)
+
+4.10 Diff结果结构
+struct DiffResult
+{
+    List<int> AddIndices;
+
+    List<int> RemoveIndices;
+}
+
+更进一步：
+
+避免GC：
+
+推荐：
+
+struct DiffResult
+{
+    int AddStart;
+    int AddEnd;
+
+    int RemoveStart;
+    int RemoveEnd;
+}
+
+因为连续区间。
+
+例如：
+
+新增：
+
+21~25
+
+不用：
+
+5个int。
+
+4.11 滑动方向
+
+记录：
+
+delta =
+currentOffset-prevOffset
+
+delta>0
+
+向下。
+
+delta<0
+
+向上。
+
+作用：
+
+优先创建。
+
+例如：
+
+向下滑。
+
+优先：
+
+110
+
+111
+
+112
+
+而不是：
+
+上面。
+
+提高体验。
+
+4.12 快速滑动问题
+
+最可怕：
+
+100~120
+
+↓
+
+1000~1020
+
+中间：
+
+全部跳过。
+
+Diff：
+
+不能：
+
+删除：
+
+100~120
+
+新增：
+
+1000~1020
+
+慢慢执行。
+
+否则：
+
+白屏。
+
+解决：
+
+Emergency Refresh
+
+如果：
+
+abs(newFirst-oldFirst)
+>
+activeCount
+
+认为：
+
+瞬移。
+
+直接：
+
+全部回收。
+
+全部重新绑定。
+
+不走 Diff。
+
+这是必须的。
+
+4.13 可见区状态机
+enum VisibleState
+{
+    Stable,
+
+    Scrolling,
+
+    FastScrolling,
+
+    Jumping
+}
+
+Stable
+
+无变化。
+
+Scrolling
+
+正常。
+
+走 Diff。
+
+FastScrolling
+
+大幅变化。
+
+增大 buffer。
+
+Jumping
+
+JumpToIndex。
+
+直接重建。
+
+4.14 Adaptive Buffer
+
+速度越快。
+
+Buffer 越大。
+
+例如：
+
+慢速：
+
+1 screen
+
+快速：
+
+2 screens
+
+极速：
+
+4 screens
+
+防止白屏。
+
+公式：
+
+buffer=
+baseBuffer+
+speed*k
+
+Clamp：
+
+0.5 viewport
+
+~
+
+4 viewport
+4.15 Reverse模式
+
+聊天列表。
+
+底部开始。
+
+正常：
+
+0
+
+↓
+
+100
+
+Reverse：
+
+100
+
+↓
+
+0
+
+VisibleManager不能假设：
+
+Top->Bottom。
+
+必须：
+
+支持：
+
+config.Reverse
+
+影响：
+
+FindIndex。
+
+Position。
+
+Jump。
+
+4.16 Horizontal模式
+
+垂直：
+
+使用：
+
+height
+
+水平：
+
+使用：
+
+width
+
+VisibleManager内部：
+
+不关心。
+
+统一：
+
+float size
+
+布局负责方向。
+
+4.17 ActiveItem数量
+
+实际：
+
+viewport=600
+
+cell=100
+
+visible=6
+
+buffer=6+6
+
+active=18
+
+百万数据：
+
+只有18个GameObject。
+
+内存：
+
+几乎不变。
+
+4.18 AI最容易写错
+错误1
+
+每帧：
+
+for(0~count)
+
+判断可见。
+
+百万数据炸。
+
+应该：
+
+FindIndexByOffset()
+
+O(logN)
+
+错误2
+
+没有PrevRange。
+
+导致：
+
+全刷新。
+
+错误3
+
+快速滑动仍然Diff。
+
+产生：
+
+几百个CreateRequest。
+
+白屏。
+
+必须：
+
+EmergencyRefresh。
+
+错误4
+
+Buffer固定。
+
+高速滑动白屏。
+
+应该：
+
+AdaptiveBuffer。
+
+错误5
+
+新增删除用List<int>
+
+产生GC。
+
+推荐：
+
+连续区间。
+
+4.19 最终类
+class SVVisibleManager
+{
+    VisibleRange CurrentRange;
+
+    VisibleRange PreviousRange;
+
+    float BufferSize;
+
+    float PrevOffset;
+
+    VisibleState State;
+
+    VisibleRange Calculate();
+
+    DiffResult Diff();
+
+    void UpdateState();
+}
+
+结构：
+
+SVVisibleManager
+│
+├── CalculateRange()
+│
+├── Diff()
+│
+├── AdaptiveBuffer()
+│
+├── EmergencyRefresh()
+│
+└── UpdateState()

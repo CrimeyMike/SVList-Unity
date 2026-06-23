@@ -1,0 +1,21 @@
+{
+    "name": "SVList.Editor",
+    "rootNamespace": "SVList.Editor",
+    "references": [
+        "SVList.Runtime",
+        "UnityEngine.CoreModule",
+        "UnityEngine.UI",
+        "UnityEditor.CoreModule"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

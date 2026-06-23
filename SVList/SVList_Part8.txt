@@ -1,0 +1,464 @@
+Part8 Layout System（布局系统）
+
+这一部分会把 SVList 从「纵向列表」升级成「通用布局框架」。
+
+很多 AI 在这里会直接把：
+
+VerticalLayout
+HorizontalLayout
+GridLayout
+
+写死在 Core 里面。
+
+这是后期无法扩展的根源。
+
+Part8 Layout System
+8.1 为什么 Layout 要独立？
+
+Core 的职责：
+
+只有：
+
+offset ↔ index
+
+它不应该知道：
+
+Vertical
+Horizontal
+Grid
+瀑布流
+
+否则：
+
+以后加：
+
+Masonry
+HexGrid
+Reverse
+RTL
+Center
+
+会把 Core 改烂。
+
+所以：
+
+必须抽象：
+
+ISVLayout
+8.2 ISVLayout接口
+
+核心：
+
+interface ISVLayout
+{
+    Vector2 GetPosition(int index);
+
+    float GetSize(int index);
+
+    float GetContentSize();
+
+    int FindIndexByOffset(float offset);
+
+    VisibleRange CalculateRange(
+        float offset,
+        float viewportSize,
+        float bufferSize);
+}
+
+所有布局：
+
+统一实现。
+
+8.3 VerticalLayout
+
+最常用。
+
+排列：
+
+0
+
+1
+
+2
+
+3
+
+4
+
+位置：
+
+y=
+heightCache.GetOffset(index)
+
+得到：
+
+anchoredPosition=
+(0,-y)
+
+高度：
+
+动态。
+
+宽度：
+
+固定。
+
+ContentSize
+contentHeight=
+heightCache.TotalHeight
+FindIndexByOffset
+
+直接：
+
+调用：
+
+heightCache.FindIndexByOffset()
+
+复杂度：
+
+O(logN)
+
+8.4 HorizontalLayout
+
+排列：
+
+0 1 2 3 4
+
+核心：
+
+把：
+
+height
+
+换成：
+
+width
+
+其它逻辑完全一样。
+
+因此：
+
+建议：
+
+抽象：
+
+float ItemSize
+
+而不是：
+
+Height。
+
+8.5 GridLayout
+
+结构：
+
+0 1 2
+
+3 4 5
+
+6 7 8
+
+需要：
+
+columnCount
+
+例如：
+
+3列。
+
+则：
+
+row=index/3
+
+column=index%3
+
+位置：
+
+x=
+column*(cellWidth+spacing)
+
+y=
+row*(cellHeight+spacing)
+8.6 Grid 的可见区
+
+不是：
+
+index→offset。
+
+而是：
+
+row→offset。
+
+先：
+
+找到：
+
+firstRow
+
+再：
+
+得到：
+
+firstIndex=
+firstRow*columnCount
+
+这样复杂度：
+
+仍然：
+
+O(logN)
+
+而不是：
+
+O(N)
+
+8.7 Dynamic Grid
+
+每行高度不同。
+
+例如：
+
+100
+
+200
+
+150
+
+高度缓存：
+
+不再保存：
+
+itemHeight。
+
+而保存：
+
+rowHeight。
+
+FenwickTree：
+
+作用于：
+
+row。
+
+这样：
+
+Grid动态高度也能支持。
+
+8.8 Masonry（瀑布流）
+
+结构：
+
+0 1
+
+2
+
+3 4
+
+5
+
+左右高度不同。
+
+不能：
+
+简单：
+
+row=index/column。
+
+需要：
+
+维护：
+
+columnHeights[]
+
+每次：
+
+新元素：
+
+加入：
+
+最矮列。
+
+类似：
+
+Pinterest。
+
+位置：
+
+minColumn
+
+↓
+
+放入
+
+↓
+
+columnHeight+=itemHeight
+8.9 Reverse Layout
+
+聊天：
+
+底部：
+
+100
+
+99
+
+98
+
+而不是：
+
+0→100。
+
+需要：
+
+Position：
+
+反转。
+
+Content Anchor：
+
+Bottom。
+
+FindIndex：
+
+也反转。
+
+不能简单：
+
+倒序数组。
+
+8.10 Center Align
+
+Jump：
+
+支持：
+
+Top
+
+Center
+
+Bottom
+
+例如：
+
+Center：
+
+scrollPos=
+offset
+-
+viewportHeight/2
++
+itemHeight/2
+8.11 Padding
+
+支持：
+
+Top
+
+Bottom
+
+Left
+
+Right
+
+计算：
+
+position+=padding
+
+不要写死。
+
+8.12 Spacing
+
+支持：
+
+itemSpacing
+
+例如：
+
+10。
+
+位置：
+
+offset
++
+index*spacing
+8.13 RTL
+
+阿拉伯语。
+
+方向：
+
+右→左。
+
+Position：
+
+x=
+contentWidth-position
+
+Layout层处理。
+
+Core 不知道。
+
+8.14 LayoutFactory
+
+根据：
+
+SVLayoutType
+
+生成：
+
+Vertical
+
+Horizontal
+
+Grid
+
+Masonry
+
+避免：
+
+if else 地狱。
+
+8.15 AI最容易写错
+错误1
+
+把 Vertical 写死。
+
+以后 Grid 全崩。
+
+错误2
+
+Grid 每个 item 单独计算。
+
+复杂度 O(N)。
+
+应该按 Row。
+
+错误3
+
+Masonry 用 row。
+
+实际上没有 row。
+
+错误4
+
+Reverse 直接倒序数组。
+
+Jump 全错。
+
+错误5
+
+Core 感知布局。
+
+产生循环依赖。
+
+Part8 最终结构
+ISVLayout
+│
+├── SVVerticalLayout
+│
+├── SVHorizontalLayout
+│
+├── SVGridLayout
+│
+└── SVMasonryLayout

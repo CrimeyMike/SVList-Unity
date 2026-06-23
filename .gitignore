@@ -1,0 +1,34 @@
+# Unity generated
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+
+# IDE
+.idea/
+.vs/
+*.csproj
+*.sln
+*.user
+*.userosscache
+*.suo
+*.userprefs
+.DS_Store
+Thumbs.db
+
+# Unity Asset Processor
+*.unitypackage
+
+# Crash logs
+Crashlytics/
+CrashReports/
+
+# Profiler
+ProfilerCaptures/
+
+# Package Manager
+Packages/

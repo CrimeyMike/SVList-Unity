@@ -1,0 +1,760 @@
+Part5 ItemContainer + Scheduler（运行循环）
+5.1 整个运行流程
+
+用户滚动
+
+↓
+
+ScrollController
+
+↓
+
+VisibleManager
+
+↓
+
+Diff
+
+↓
+
+得到：
+
+新增：
+120~125
+
+删除：
+94~99
+
+↓
+
+加入：
+
+CreateQueue
+
+RecycleQueue
+
+↓
+
+LateUpdate
+
+↓
+
+Scheduler执行
+
+↓
+
+ObjectPool
+
+↓
+
+Renderer.Bind()
+
+↓
+
+完成
+
+注意：
+
+不立即创建
+不立即回收
+
+所有操作进入队列。
+
+5.2 为什么不能立即 Create
+
+假设：
+
+当前：
+
+100~120
+
+下一帧：
+
+110~130
+
+新增：
+
+121~130
+
+如果：
+
+for(...)
+Instantiate()
+
+这一帧可能：
+
+Instantiate 10 个。
+
+UGUI：
+
+Awake
+OnEnable
+Layout
+
+全部执行。
+
+产生：
+
+Canvas rebuild
+
+直接卡。
+
+所以：
+
+必须：
+
+进入队列。
+
+5.3 CreateQueue
+
+结构：
+
+Queue<CreateRequest>
+
+CreateRequest：
+
+struct CreateRequest
+{
+    int Index;
+
+    int PrefabID;
+}
+
+例如：
+
+121
+
+122
+
+123
+
+124
+
+125
+
+进入队列。
+
+LateUpdate：
+
+每帧：
+
+只处理：
+
+MaxInstantiatePerFrame=3
+
+于是：
+
+第一帧：
+
+121
+
+122
+
+123
+
+第二帧：
+
+124
+
+125
+
+平滑。
+
+5.4 为什么要 LateUpdate
+
+如果：
+
+Update：
+
+Create()
+
+Recycle()
+
+ScrollRect还可能继续变化。
+
+Layout还未稳定。
+
+容易：
+
+刚创建
+
+立刻回收
+
+白白浪费。
+
+LateUpdate：
+
+保证：
+
+所有Update结束
+↓
+
+ScrollRect稳定
+↓
+
+统一处理
+
+这是非常重要的。
+
+5.5 RecycleQueue
+
+结构：
+
+Queue<RecycleRequest>
+
+而不是：
+
+直接：
+
+pool.Release(item)
+
+原因：
+
+SetParent()
+
+会触发：
+
+Transform dirty
+
+Canvas rebuild
+
+如果：
+
+一边创建。
+
+一边回收。
+
+会疯狂 rebuild。
+
+所以：
+
+统一：
+
+LateUpdate。
+
+5.6 ItemContainer
+
+核心：
+
+Dictionary<int, ActiveItem>
+
+例如：
+
+当前：
+
+100
+101
+102
+103
+104
+
+Dictionary：
+
+100 → itemA
+
+101 → itemB
+
+102 → itemC
+
+作用：
+
+快速：
+
+Contains(index)
+
+复杂度：
+
+O(1)
+
+5.7 为什么不用 List
+
+很多 AI 会写：
+
+List<Renderer>
+
+然后：
+
+Find(index)
+
+复杂度：
+
+O(N)
+
+虽然只有二十几个 item。
+
+但：
+
+Diff 每帧调用。
+
+长期仍浪费。
+
+Dictionary 更稳定。
+
+5.8 ActiveItem
+class ActiveItem
+{
+    int Index;
+
+    int PrefabID;
+
+    ItemState State;
+
+    RectTransform Rect;
+
+    ISVItemRenderer Renderer;
+}
+
+生命周期：
+
+Pool
+
+↓
+
+Active
+
+↓
+
+PendingRecycle
+
+↓
+
+Pool
+5.9 Item状态机
+Pooled
+
+对象池内。
+
+不可见。
+
+Active
+
+显示中。
+
+PendingRecycle
+
+等待回收。
+
+为什么需要？
+
+因为：
+
+AI最喜欢：
+
+Recycle(item)
+
+Recycle(item)
+
+两次。
+
+结果：
+
+同一个对象进入对象池两次。
+
+下一次：
+
+两个 index
+
+拿到同一个 GameObject。
+
+超级难查。
+
+状态机避免：
+
+if(state!=Active)
+return;
+5.10 CreateScheduler
+
+类：
+
+SVInstantiateScheduler
+
+内部：
+
+Queue<CreateRequest>
+
+每帧：
+
+count=0
+
+while(queue.Count>0)
+{
+    if(count>=MaxInstantiatePerFrame)
+        break;
+
+    CreateOne();
+
+    count++;
+}
+5.11 CreateOne()
+
+流程：
+
+先：
+
+ObjectPool.Get()
+
+没有？
+
+Instantiate
+
+↓
+
+SetParent(content)
+
+↓
+
+RectTransform
+
+↓
+
+Renderer.OnCreate()
+
+↓
+
+Bind()
+
+↓
+
+加入 ActiveContainer
+
+↓
+
+完成
+
+注意：
+
+OnCreate()
+
+只执行一次。
+
+不能每次复用都执行。
+
+5.12 RecycleScheduler
+
+流程：
+
+while(queue.Count>0)
+{
+    item.Renderer.OnUnbind();
+
+    item.Rect.SetParent(poolRoot);
+
+    item.State=Pooled;
+
+    pool.Release();
+}
+
+注意：
+
+先：
+
+OnUnbind()
+
+再：
+
+回池。
+
+否则：
+
+事件监听泄漏。
+
+5.13 生命周期
+
+首次：
+
+Instantiate
+
+↓
+
+Awake
+
+↓
+
+OnCreate
+
+↓
+
+OnBind
+
+滚出：
+
+OnUnbind
+
+↓
+
+Recycle
+
+再次进入：
+
+OnBind
+
+不会：
+
+OnCreate。
+
+5.14 Renderer接口
+
+推荐：
+
+interface ISVItemRenderer<T>
+{
+    void OnCreate();
+
+    void OnBind(T data,int index);
+
+    void OnUnbind();
+
+    void OnRecycle();
+}
+
+作用：
+
+OnCreate
+
+缓存组件。
+
+只执行一次。
+
+GetComponent<TMP_Text>()
+
+避免重复。
+
+OnBind
+
+刷新数据。
+
+OnUnbind
+
+取消监听。
+
+停止协程。
+
+OnRecycle
+
+彻底销毁时。
+
+释放资源。
+
+5.15 为什么不能只有 SetData
+
+AI喜欢：
+
+SetData()
+
+问题：
+
+button：
+
+onClick.AddListener()
+
+越来越多。
+
+最终：
+
+点击一次。
+
+执行十次。
+
+所以：
+
+必须：
+
+OnUnbind()
+
+button.onClick.RemoveAllListeners()
+5.16 双缓冲思想
+
+当前：
+
+Active
+
+18
+
+PendingRecycle：
+
+5
+
+Pool：
+
+30
+
+不要：
+
+刚离开可视区：
+
+立刻回收。
+
+而是：
+
+放：
+
+PendingRecycle。
+
+原因：
+
+用户可能马上滑回来。
+
+减少：
+
+SetParent。
+
+减少：
+
+Canvas rebuild。
+
+5.17 延迟回收策略
+
+例如：
+
+超过：
+
+PendingCount >
+ActiveCount *0.3
+
+再统一：
+
+Recycle。
+
+效果：
+
+平滑。
+
+减少抖动。
+
+5.18 FastScroll模式
+
+如果：
+
+100
+
+↓
+
+1000
+
+中间：
+
+跳过。
+
+此时：
+
+CreateQueue：
+
+不要：
+
+慢慢处理。
+
+直接：
+
+Emergency。
+
+全部回收
+
+↓
+
+全部创建
+
+否则：
+
+会出现：
+
+空白。
+
+5.19 AI最容易写错
+错误1
+
+立即 Instantiate。
+
+导致：
+
+掉帧。
+
+错误2
+
+立即 Release。
+
+疯狂 SetParent。
+
+错误3
+
+没有 PendingRecycle。
+
+重复回收。
+
+错误4
+
+Bind 时 GetComponent。
+
+大量耗时。
+
+应该：
+
+OnCreate缓存。
+
+错误5
+
+没有 OnUnbind。
+
+监听泄漏。
+
+错误6
+
+List.Find()
+
+代替 Dictionary。
+
+错误7
+
+Create 和 Recycle 同时进行。
+
+导致：
+
+Canvas rebuild 风暴。
+
+5.20 最终结构
+SVItemContainer
+│
+├── ActiveItems
+│
+├── CreateQueue
+│
+├── RecycleQueue
+│
+├── PendingRecycle
+│
+├── InstantiateScheduler
+│
+└── RecycleScheduler
+
+整体流程：
+
+Diff
+
+↓
+
+CreateQueue
+
+RecycleQueue
+
+↓
+
+LateUpdate
+
+↓
+
+CreateScheduler
+
+↓
+
+Bind
+
+↓
+
+PendingRecycle
+
+↓
+
+RecycleScheduler
+
+↓
+
+Pool

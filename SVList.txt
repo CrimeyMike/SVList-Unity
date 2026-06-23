@@ -1,0 +1,646 @@
+SVList 完整设计文档目录
+Part0 项目总览
+项目定位
+
+高性能 UGUI 虚拟列表框架
+
+目标：
+
+百万数据支持
+动态高度
+多模板
+0GC
+Inspector配置
+Grid支持
+瀑布流扩展
+Addressables支持
+开源插件级别
+Part1 总体架构（4+1视图）
+逻辑视图
+业务层
+ ↓
+SVListView
+ ↓
+SVListCore
+ ↓
+Layout
+Visible
+HeightCache
+ObjectPool
+InstantiateScheduler
+RecycleScheduler
+ ↓
+Renderer
+开发视图
+Runtime
+    Core
+    Layout
+    Pool
+    Scheduler
+    Utils
+
+Editor
+    Inspector
+    PropertyDrawer
+
+Demo
+    Inventory
+    Chat
+    Ranking
+
+Tests
+    EditMode
+    PlayMode
+运行视图
+
+滚动流程
+
+ScrollRect
+↓
+ScrollController
+
+↓
+VisibleManager
+
+↓
+Diff算法
+
+↓
+InstantiateScheduler
+
+↓
+Renderer.Bind
+Part2 Runtime目录结构
+SVList
+
+Runtime
+
+Core
+SVListCore
+SVListState
+
+Layout
+SVVerticalLayout
+SVHorizontalLayout
+SVGridLayout
+
+Visible
+SVVisibleManager
+
+Height
+SVHeightCache
+SVFenwickTree
+
+Pool
+SVObjectPoolManager
+
+Scheduler
+SVInstantiateScheduler
+SVRecycleScheduler
+
+Container
+SVItemContainer
+
+Renderer
+ISVItemRenderer
+
+Data
+ISVDataSource
+
+Animation
+SVTweenScroll
+
+Debug
+SVProfiler
+SVDebugPanel
+
+Utils
+
+Editor
+
+Tests
+
+Demo
+Part3 类图设计
+
+包含：
+
+SVListView
+
+Mono入口
+
+字段：
+
+ScrollRect scrollRect;
+
+RectTransform viewport;
+
+RectTransform content;
+
+SVConfig config;
+
+SVListCore core;
+
+生命周期：
+
+Awake
+
+Initialize
+
+UpdateVisibleItems
+
+Refresh
+
+Destroy
+SVListCore
+
+纯逻辑
+
+不继承Mono
+
+负责：
+
+index计算
+offset换算
+diff算法
+
+字段：
+
+SVListState state;
+
+SVHeightCache heightCache;
+
+SVVisibleManager visibleManager;
+
+SVItemContainer container;
+SVVisibleManager
+
+负责：
+
+scrollY
+
+↓
+
+firstVisible
+
+lastVisible
+
+支持：
+
+preload
+reverse
+center
+SVLayoutManager
+
+负责：
+
+index→position
+
+支持：
+
+Vertical
+Horizontal
+Grid
+
+未来：
+
+Masonry
+
+SVObjectPoolManager
+
+支持：
+
+多Prefab对象池
+
+内部：
+
+Dictionary<int,Pool>
+SVInstantiateScheduler
+
+分帧创建
+
+支持：
+
+MaxInstantiatePerFrame
+SVRecycleScheduler
+
+延迟回收
+
+防止频繁SetParent
+
+SVHeightCache
+
+管理：
+
+真实高度
+
+预估高度
+
+是否测量
+
+SVFenwickTree
+
+支持：
+
+O(logN)
+
+前缀和
+
+动态更新
+
+offset→index
+
+SVItemContainer
+
+管理：
+
+Dictionary<int,Item>
+
+维护：
+
+活跃元素
+
+SVProfiler
+
+统计：
+
+FPS
+
+可见数
+
+对象池
+
+GC
+
+Part4 数据结构定义
+
+详细定义：
+
+HeightInfo
+class HeightInfo
+{
+    bool measured;
+
+    float height;
+
+    float estimateHeight;
+}
+ItemState
+enum ItemState
+{
+    Active,
+
+    PendingRecycle,
+
+    Pooled
+}
+VisibleRange
+struct VisibleRange
+{
+    int first;
+
+    int last;
+}
+CreateRequest
+index
+
+prefabId
+RecycleRequest
+renderer
+SVListState
+scrollOffset
+
+firstVisible
+
+lastVisible
+
+contentSize
+Part5 滚动流程时序图
+
+ScrollRect改变
+
+↓
+
+ScrollController
+
+↓
+
+SVCore.Update()
+
+↓
+
+VisibleManager.Calculate()
+
+↓
+
+Diff算法
+
+↓
+
+新增索引
+
+↓
+
+InstantiateScheduler
+
+↓
+
+Bind
+
+↓
+
+RecycleScheduler
+
+↓
+
+回收旧元素
+
+包含完整时序图。
+
+Part6 可见区算法
+
+详细推导：
+
+preload
+buffer
+fast scroll
+reverse
+horizontal
+center mode
+
+包含：
+
+数学公式
+
+边界情况
+
+复杂度分析
+
+Part7 Diff算法
+
+输入：
+
+旧范围
+
+10~20
+
+新范围
+
+13~24
+
+输出：
+
+新增：
+
+21 22 23 24
+
+删除：
+
+10 11 12
+
+避免全量刷新。
+
+复杂度：
+
+O(n)
+
+Part8 FenwickTree算法
+
+详细推导：
+
+Build
+Update
+Query
+FindByOffset
+
+复杂度：
+
+O(logN)
+
+附全部代码。
+
+Part9 动态高度系统
+
+高度测量流程：
+
+Create
+
+↓
+
+Bind
+
+↓
+
+Layout rebuild
+
+↓
+
+GetPreferredHeight
+
+↓
+
+Update HeightCache
+
+↓
+
+FenwickTree Update
+
+↓
+
+修正ContentSize
+
+避免：
+
+跳动
+
+重叠
+
+空白
+
+Part10 ObjectPool系统
+
+支持：
+
+多模板
+预热
+自动扩容
+最大缓存
+清理策略
+LRU
+Addressables
+Part11 生命周期设计
+
+Renderer
+
+OnCreate()
+
+OnBind()
+
+OnUnbind()
+
+OnRecycle()
+
+防止：
+
+监听泄漏
+
+图片泄漏
+
+协程泄漏
+
+Part12 Layout系统
+
+Vertical
+
+Horizontal
+
+Grid
+
+Masonry
+
+详细数学推导。
+
+Part13 JumpToIndex系统
+
+支持：
+
+Top
+
+Center
+
+Bottom
+
+Smooth
+
+EnsureVisible
+
+包含动画插值。
+
+Part14 Scheduler系统
+
+Instantiate
+
+Recycle
+
+分帧执行
+
+避免：
+
+一次创建20个卡顿。
+
+Part15 Inspector系统
+
+CustomEditor
+
+Foldout
+
+实时显示：
+
+VisibleCount
+
+PoolCount
+
+FPS
+
+Memory
+
+按钮：
+
+Refresh
+
+ClearPool
+
+Jump
+
+Part16 Debug系统
+
+Scene Gizmos
+
+显示：
+
+viewport
+
+buffer
+
+active item
+
+位置
+
+Part17 异常处理
+
+数据为空
+
+删除当前元素
+
+快速滑动
+
+数据变化
+
+模板变化
+
+高度变化
+
+防止：
+
+越界
+
+重复回收
+
+重复Bind
+
+Part18 测试系统
+
+EditMode
+
+PlayMode
+
+压力测试
+
+包含：
+
+100万数据
+动态高度
+Grid
+多模板
+插入删除
+JumpToIndex
+高频滑动
+Android低端机
+Part19 Demo
+
+背包
+
+聊天
+
+排行榜
+
+商城
+
+邮件
+
+任务列表
+
+Part20 开源工程结构
+SVList
+
+Runtime
+
+Editor
+
+Samples~
+
+Tests
+
+Documentation~
+
+CHANGELOG
+
+LICENSE
+
+README
+
+支持：
+
+UPM安装
+Git安装
+MIT协议
