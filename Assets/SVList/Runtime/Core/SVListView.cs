@@ -93,6 +93,14 @@ namespace SVList
 
         private void CreatePoolRoot()
         {
+            // 编辑期与运行期 Awake 都会执行，避免重复创建
+            var existing = transform.Find("PoolRoot");
+            if (existing != null)
+            {
+                _poolRoot = existing;
+                return;
+            }
+
             var poolGo = new GameObject("PoolRoot");
             poolGo.SetActive(true);
             poolGo.transform.SetParent(transform);
@@ -125,6 +133,7 @@ namespace SVList
             // 注册回调
             _core.OnContentSizeChanged = OnContentSizeChanged;
             _core.OnScrollPositionChanged = OnScrollPositionChanged;
+            _core.OnScrollOffsetShift = OnScrollOffsetShift;
             _core.OnDebugInfoUpdated = OnDebugInfoUpdated;
 
             // 设置 Viewport 尺寸
@@ -133,6 +142,67 @@ namespace SVList
 
             // 连接 ScrollController
             _scrollController.OnScrollOffsetChanged += OnScrollOffsetChanged;
+
+            ValidateHierarchy();
+        }
+
+        /// <summary>
+        /// 接入自检：层级/锚点错误时给出可直接照做的提示，避免静默失败
+        /// </summary>
+        private void ValidateHierarchy()
+        {
+            if (_scrollRect == null)
+            {
+                Debug.LogError("[SVList] 缺少 ScrollRect：SVListView 需要挂在带 ScrollRect 的物体上（可用菜单 GameObject/UI/SVList 一键创建）。", this);
+                return;
+            }
+
+            if (_viewport == null)
+            {
+                Debug.LogError($"[SVList] 缺少 Viewport：请在 ScrollRect({name})下创建带 RectMask2D 的 Viewport 并赋给 ScrollRect.viewport。", this);
+                return;
+            }
+
+            if (_content == null)
+            {
+                Debug.LogError($"[SVList] 缺少 Content：请在 Viewport 下创建 Content 并赋给 ScrollRect.content。", this);
+                return;
+            }
+
+            bool isVertical = _config.Direction != SVDirection.Horizontal;
+            if (isVertical)
+            {
+                if (Mathf.Abs(_content.anchorMin.y - 1f) > 0.01f ||
+                    Mathf.Abs(_content.anchorMax.y - 1f) > 0.01f ||
+                    Mathf.Abs(_content.pivot.y - 1f) > 0.01f)
+                {
+                    Debug.LogWarning($"[SVList] Content 未顶部锚定（anchorMin.y/anchorMax.y/pivot.y 应均为 1），垂直列表会排版异常。" +
+                        "可用菜单 GameObject/UI/SVList/垂直列表(通用) 一键创建正确层级。", this);
+                }
+            }
+            else
+            {
+                if (Mathf.Abs(_content.anchorMin.x) > 0.01f ||
+                    Mathf.Abs(_content.anchorMax.x) > 0.01f ||
+                    Mathf.Abs(_content.pivot.x) > 0.01f)
+                {
+                    Debug.LogWarning($"[SVList] Content 未左锚定（anchorMin.x/anchorMax.x/pivot.x 应均为 0），水平列表会排版异常。", this);
+                }
+            }
+
+            if (_viewport.rect.height <= 1f || _viewport.rect.width <= 1f)
+            {
+                Debug.LogWarning($"[SVList] Viewport 尺寸为 {_viewport.rect.width}x{_viewport.rect.height}，列表可能不可见：请确认 Viewport 在布局中占有实际尺寸（非零、未被 Canvas 隐藏）。", this);
+            }
+        }
+
+        private bool HasRegisteredPrefabs()
+        {
+            for (int i = 0; i < _itemPrefabs.Count; i++)
+            {
+                if (_itemPrefabs[i] != null) return true;
+            }
+            return false;
         }
 
         private void RegisterPrefabs()
@@ -157,10 +227,20 @@ namespace SVList
 
         private void Start()
         {
-            if (_dataSource != null)
+            // 仅当外部（Inspector/其他脚本）只赋值了 DataSource 而没调用过 Initialize 时兜底；
+            // 若已通过 Initialize API 初始化过（数据源已由调用方完成首渲），不再重复初始化，
+            // 否则二次 Initialize 会重建状态，与调用方的后续操作（如 ScrollToBottom）打架
+            if (_dataSource != null && !_hasInitializedOnce)
             {
                 Initialize(_dataSource);
             }
+        }
+
+        private bool _hasInitializedOnce;
+
+        private void MarkInitialized()
+        {
+            _hasInitializedOnce = true;
         }
 
         private void LateUpdate()
@@ -208,6 +288,14 @@ namespace SVList
             }
         }
 
+        private void OnScrollOffsetShift(float delta)
+        {
+            if (_scrollController != null)
+            {
+                _scrollController.ShiftScrollOffset(delta);
+            }
+        }
+
         private int _debugFrameCounter;
 
         private void OnDebugInfoUpdated(DebugInfo info)
@@ -233,8 +321,17 @@ namespace SVList
         /// </summary>
         public void Initialize<T>(IList<T> dataList, Func<int, int> prefabSelector = null)
         {
+            if (!HasRegisteredPrefabs())
+            {
+                Debug.LogError("[SVList] 尚未注册任何 Item 模板：请在 Inspector 的 Item Prefabs 拖入预制体，或在 Initialize 之前调用 RegisterItemPrefab()。", this);
+                return;
+            }
+
             var dataSource = new ListDataSource<T>(dataList);
             _dataSource = dataSource;
+
+            // 标记已初始化，Start 不再兜底重入
+            MarkInitialized();
 
             // 用用户提供的选择器覆盖默认（为 null 则保持默认 SelectPrefab）
             if (prefabSelector != null)
@@ -257,7 +354,22 @@ namespace SVList
         /// </summary>
         public void Initialize(ISVDataSource dataSource)
         {
+            if (dataSource == null)
+            {
+                Debug.LogError("[SVList] Initialize 收到 null 数据源。", this);
+                return;
+            }
+
+            if (!HasRegisteredPrefabs())
+            {
+                Debug.LogError("[SVList] 尚未注册任何 Item 模板：请在 Inspector 的 Item Prefabs 拖入预制体，或在 Initialize 之前调用 RegisterItemPrefab()。", this);
+                return;
+            }
+
             _dataSource = dataSource;
+
+            // 标记已初始化，Start 不再兜底重入
+            MarkInitialized();
 
             // 更新 Viewport 尺寸
             if (_scrollController != null)
@@ -286,7 +398,7 @@ namespace SVList
         }
 
         /// <summary>
-        /// 插入数据
+        /// 插入数据（单条，数据源需先完成插入）
         /// </summary>
         public void InsertItem(int index)
         {
@@ -294,11 +406,86 @@ namespace SVList
         }
 
         /// <summary>
-        /// 删除数据
+        /// 批量插入数据（如头部加载一页历史消息）。
+        /// 插入点在视口上方时自动补偿滚动位置，画面不跳。
+        /// </summary>
+        public void InsertItems(int index, int count)
+        {
+            _core?.InsertItems(index, count);
+        }
+
+        /// <summary>
+        /// 追加数据到末尾（数据源需先完成追加），如聊天新消息
+        /// </summary>
+        public void AppendItems(int count)
+        {
+            if (_core == null || count <= 0) return;
+            _core.InsertItems(_core.State.TotalCount, count);
+        }
+
+        /// <summary>
+        /// 追加单条数据到末尾
+        /// </summary>
+        public void AppendItem()
+        {
+            AppendItems(1);
+        }
+
+        /// <summary>
+        /// 删除数据（单条，数据源需先完成删除）
         /// </summary>
         public void RemoveItem(int index)
         {
             _core?.RemoveItem(index);
+        }
+
+        /// <summary>
+        /// 批量删除数据（数据源需先完成删除）
+        /// </summary>
+        public void RemoveItems(int index, int count)
+        {
+            _core?.RemoveItems(index, count);
+        }
+
+        /// <summary>
+        /// 设置高度预计算提供者（须在 Initialize 之前调用）。
+        /// 数据源实现 ISVItemHeightProvider 时可省略此步，会自动识别。
+        /// </summary>
+        public void SetHeightProvider(ISVItemHeightProvider provider)
+        {
+            if (_core != null) _core.HeightProvider = provider;
+        }
+
+        /// <summary>
+        /// 是否停在列表底部（聊天用它决定新消息是否自动跟滚）
+        /// </summary>
+        public bool IsAtBottom(float threshold = 16f)
+        {
+            return _core?.IsAtBottom(threshold) ?? true;
+        }
+
+        /// <summary>
+        /// 立即滚动到底部
+        /// </summary>
+        public void ScrollToBottom()
+        {
+            _core?.ScrollToBottom();
+        }
+
+        /// <summary>
+        /// 平滑滚动到底部（新消息跟滚的常用组合：IsAtBottom 为真时调用）
+        /// </summary>
+        public void ScrollToBottomSmooth()
+        {
+            if (_core == null || _scrollController == null) return;
+
+            float targetOffset = _core.MaxScrollOffset;
+            StartCoroutine(SVTweenScroll.Animate(
+                _scrollController,
+                _scrollController.ScrollOffset,
+                targetOffset,
+                _config.JumpDuration,
+                _config.JumpEaseCurve));
         }
 
         /// <summary>
@@ -341,13 +528,24 @@ namespace SVList
         }
 
         /// <summary>
-        /// 获取当前活跃的 Renderer
+        /// 获取当前活跃的 Renderer（该条不可见时返回 null）
         /// </summary>
         public ISVItemRenderer GetRenderer(int index)
         {
-            var container = _core?.State;
-            // 通过 Core 的 ItemContainer 获取
-            return null; // 需要暴露 ItemContainer
+            return _core?.GetRenderer(index);
+        }
+
+        /// <summary>
+        /// 运行时注册 Item 模板（代码构建 UI、无序列化 Prefab 时使用）。
+        /// 须在 Initialize 之前调用；第一个注册的模板 PrefabID = 0（默认选择器）。
+        /// </summary>
+        public void RegisterItemPrefab(GameObject prefab)
+        {
+            if (prefab == null || _poolManager == null) return;
+
+            _itemPrefabs.Add(prefab);
+            _poolManager.RegisterPrefab(_itemPrefabs.Count - 1, prefab,
+                _config != null ? _config.MaxPoolSize : -1);
         }
 
         /// <summary>

@@ -25,5 +25,18 @@ namespace SVList
 
         /// <summary>运行时更新布局参数（spacing/padding/cellSize 等），从 SVConfig 读取</summary>
         void UpdateParameters(SVConfig config);
+
+        /// <summary>
+        /// index 处元素在滚动坐标系（scrollOffset 空间）中的起点，含 padding 与 spacing 累积。
+        /// 用于插入/删除时判断改动点是否位于视口上方。
+        /// </summary>
+        float GetItemStartOffset(int index);
+
+        /// <summary>
+        /// 在任意位置插入/删除 count 个主轴尺寸总和为 itemsSize 的元素后，
+        /// 改动点之后所有内容的坐标平移量（含 spacing 贡献）。
+        /// 用于头部插入历史消息时的滚动位置补偿。
+        /// </summary>
+        float GetInsertShift(int count, float itemsSize);
     }
 }

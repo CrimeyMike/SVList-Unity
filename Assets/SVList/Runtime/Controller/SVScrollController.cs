@@ -179,6 +179,33 @@ namespace SVList
         }
 
         /// <summary>
+        /// 增量平移滚动位置（用于插入/删除补偿）。
+        /// 直接对 content.anchoredPosition 做加法，不经过 verticalNormalizedPosition ——
+        /// UGUI 的 normalized setter 内部会把 m_Velocity 清零，走它会打断用户惯性。
+        /// </summary>
+        public void ShiftScrollOffset(float delta)
+        {
+            if (_scrollRect == null || _scrollRect.content == null || delta == 0f) return;
+
+            var c = _scrollRect.content;
+            Vector2 pos = c.anchoredPosition;
+            if (IsVertical)
+            {
+                pos.y += Reverse ? -delta : delta;
+            }
+            else
+            {
+                pos.x += Reverse ? delta : -delta;
+            }
+            c.anchoredPosition = pos;
+
+            ScrollOffset += delta;
+
+            // 同步通知（ScrollRect 帧末的 onValueChanged 也会再确认一次）
+            OnScrollOffsetChanged?.Invoke(ScrollOffset);
+        }
+
+        /// <summary>
         /// 获取 Content 当前尺寸
         /// </summary>
         private float GetContentSize()

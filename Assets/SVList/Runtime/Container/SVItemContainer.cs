@@ -156,23 +156,26 @@ namespace SVList
         }
 
         /// <summary>
-        /// 索引偏移（插入/删除后需要调整后续索引）
+        /// 索引偏移（插入/删除后需要调整后续索引）。
+        /// 使用缓存缓冲列表，避免高频插入/删除时每次分配新 List。
         /// </summary>
+        private readonly List<KeyValuePair<int, ActiveItem>> _shiftBuffer = new List<KeyValuePair<int, ActiveItem>>(32);
+
         public void ShiftIndices(int fromIndex, int delta)
         {
             if (delta == 0) return;
 
             // 收集需要调整的元素
-            var itemsToShift = new List<KeyValuePair<int, ActiveItem>>();
+            _shiftBuffer.Clear();
             foreach (var kvp in _activeItems)
             {
                 if (kvp.Key >= fromIndex)
                 {
-                    itemsToShift.Add(kvp);
+                    _shiftBuffer.Add(kvp);
                 }
             }
 
-            foreach (var kvp in itemsToShift)
+            foreach (var kvp in _shiftBuffer)
             {
                 _activeItems.Remove(kvp.Key);
                 kvp.Value.Index = kvp.Key + delta;

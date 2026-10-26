@@ -106,5 +106,15 @@ namespace SVList
 
             return new VisibleRange(first, last);
         }
+
+        public float GetItemStartOffset(int index)
+        {
+            return _widthCache.GetOffset(index) + _paddingLeft + index * _spacing;
+        }
+
+        public float GetInsertShift(int count, float itemsSize)
+        {
+            return itemsSize + count * _spacing;
+        }
     }
 }

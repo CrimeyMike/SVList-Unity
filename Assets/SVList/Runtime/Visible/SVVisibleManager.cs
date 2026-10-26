@@ -213,6 +213,31 @@ namespace SVList
         }
 
         /// <summary>
+        /// 数据插入/删除后平移已记录的可见范围，避免 Diff 把索引变化误判为滚动。
+        /// offsetDelta 用于同步 _prevOffset，防止补偿后的偏移变化被当成滚动速度尖峰。
+        /// </summary>
+        public void ShiftIndices(int fromIndex, int delta, float offsetDelta = 0f)
+        {
+            if (delta == 0) return;
+
+            CurrentRange = ShiftRange(CurrentRange, fromIndex, delta);
+            PreviousRange = ShiftRange(PreviousRange, fromIndex, delta);
+            _prevOffset += offsetDelta;
+        }
+
+        private static VisibleRange ShiftRange(VisibleRange range, int fromIndex, int delta)
+        {
+            if (range.First < 0) return range;
+
+            int first = range.First >= fromIndex ? range.First + delta : range.First;
+            int last = range.Last >= fromIndex ? range.Last + delta : range.Last;
+
+            first = Mathf.Max(0, first);
+            last = Mathf.Max(first, Mathf.Max(0, last));
+            return new VisibleRange(first, last);
+        }
+
+        /// <summary>
         /// 重置状态
         /// </summary>
         public void Reset()

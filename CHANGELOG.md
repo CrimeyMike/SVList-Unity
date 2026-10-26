@@ -2,6 +2,28 @@
 
 All notable changes to SVList will be documented in this file.
 
+## [1.1.0] - 2026-10-26
+
+### Added
+- Incremental `InsertItems` / `RemoveItems` with viewport compensation: inserting a page of history at the top no longer resets the view or discards measured heights (previously fell back to a full refresh and jumped to top)
+- `ISVItemHeightProvider` height pre-computation channel: the data layer can measure item heights up front (e.g. TMP `GetPreferredValues`), eliminating the estimate→correct jitter; auto-detected when the data source implements the interface, falls back to `EstimateHeight` per item
+- Chat-oriented APIs: `IsAtBottom`, `ScrollToBottom`, `ScrollToBottomSmooth`, `AppendItem(s)`, `RegisterItemPrefab`, `GetRenderer`, `MaxScrollOffset`
+- `SVItemBase<T>` convenience base class — implement only `OnBind` instead of the 5-method renderer interface
+- Setup self-check: actionable errors for missing Viewport / wrong Content anchors / unregistered item templates
+- Hierarchy one-click creation menu (`GameObject/UI/SVList`: vertical / chat / horizontal presets); generated Viewport carries a transparent raycast-target Image so the list is draggable out of the box
+- Prefab-based chat demo scene (in-package, `Examples/Scenes/`), in-package Chinese dynamic TMP font asset, and `Tools → SVList → Rebuild Chat Demo Scene` rebuild tool; all asset paths are derived from the script location, so the package works at any install path
+- 17 EditMode unit tests (Fenwick tree / height cache / insert-compensation behavior)
+
+### Changed
+- Zero-GC hot path: cached provider delegates, pooled `HeightInfo` objects, reused shift-index buffers, and renderer re-measure skipped when the height provider already supplied a height. Measured ~7.3 KB → ~4.6 KB per frame while scrolling; the remaining ~85% of allocation is TMP text assignment itself
+- Insert/delete viewport compensation now shifts the scroll position incrementally via `SVScrollController.ShiftScrollOffset` instead of writing `verticalNormalizedPosition`, so it no longer clears `ScrollRect.velocity` (scroll inertia survives a history page load)
+
+### Fixed
+- First-layout overlap caused by double `Initialize` (script `Start` + manual call) leaking orphaned items — `Initialize` is now idempotent and `view.Start` is re-entry guarded
+- Inactive TMP measure text returning garbage values from `GetPreferredValues` (inactive scene-serialized TMP never runs Awake/OnEnable); the demo keeps its measure text active but off-canvas and fully transparent
+- Duplicate `PoolRoot` creation
+- `GetRenderer` returning half-initialized renderers
+
 ## [1.0.1] - 2025-06-23
 
 ### Changed
@@ -38,13 +60,3 @@ All notable changes to SVList will be documented in this file.
 
 ### Fixed
 - Grid items positioned at X=0 (now use full `GetPosition` Vector2)
-- Grid item width was 0px (now uses explicit `GridCellWidth`)
-- `SVGridLayout` missing `UpdateParameters` (now implemented)
-- `ISVLayout` missing `UpdateParameters(SVConfig)` (now in interface)
-- Editor Inspector missing grid config fields (now shows all 7 grid params)
-- Gizmos caused 500+ batches in detailed mode (now frame-skipped, wireframe-only, label-throttled)
-- 3 demo scripts missing namespace (now `SVList.Demo`)
-- Prefab/scene `m_EditorClassIdentifier` stale after namespace migration
-- Unused `using System` in `SVVisibleManager`
-
-[1.0.0]: https://github.com/CrimeyMike/SVList-Unity/releases/tag/v1.0.0

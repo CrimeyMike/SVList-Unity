@@ -45,16 +45,17 @@ SVList is a production-grade virtual scroll list for Unity UGUI. It handles **1,
 | 分帧实例化 / Frame-budgeted instantiation | 已实现 / Done |
 | Editor Gizmos 详细调试覆盖层 / Detailed Gizmos | 已实现 / Done |
 | 纯 C# 核心逻辑 (可单元测试) / Pure-C# core | 已实现 / Done |
+| 增量增删 + 视口补偿（头部插入历史不跳屏）/ Incremental insert/remove with viewport compensation | 已实现 / Done |
+| 高度预计算 (ISVItemHeightProvider，消除估算跳动) / Height pre-computation | 已实现 / Done |
+| 聊天 API (IsAtBottom / ScrollToBottom / AppendItems) / Chat-oriented APIs | 已实现 / Done |
 | 瀑布流布局 / Masonry layout | 计划中 / Planned |
-| 单元测试 / Unit tests | 计划中 / Planned |
+| 单元测试 / Unit tests | 已实现（17 项 EditMode）/ Done (17 EditMode tests) |
 
 ## ⚠️ 注意事项
 
-本项目仍处于早期开发阶段，部分功能可能不完善或存在潜在问题。
+1.0.x 阶段本项目尚处早期；**1.1.0 起已在实际 Unity 项目的生产环境完成验证**（不等高聊天列表：增量插入历史、底部跟滚、滚动热路径零 GC），并补充了 17 项 EditMode 单元测试。
 
-目前更适合用于学习、测试与二次开发参考，而非直接用于生产环境。
-
-后续版本会持续优化性能、稳定性以及功能完整性。
+Before 1.1.0 this project was early-stage. **As of 1.1.0 it is production-verified** in a real Unity project (variable-height chat list: incremental history insert, bottom auto-scroll, zero-GC scrolling hot path) and covered by 17 EditMode unit tests.
 
 ---
 
@@ -75,7 +76,7 @@ https://github.com/CrimeyMike/SVList-Unity.git?path=/Assets/SVList
 安装指定版本 / Install a specific version:
 
 ```
-https://github.com/CrimeyMike/SVList-Unity.git?path=/Assets/SVList#v1.0.1
+https://github.com/CrimeyMike/SVList-Unity.git?path=/Assets/SVList#v1.1.0
 ```
 
 ### 手动安装 / Manual
@@ -115,6 +116,18 @@ SVListView (MonoBehaviour 薄壳入口)
 ---
 
 ## 快速开始 / Quick Start
+
+### 0. 最快路径（1.1.0+） / Fastest Path
+
+1. Hierarchy 右键 `UI → SVList` 一键创建（垂直 / 聊天 / 水平三种预设，锚点与射线承接已配好）。Right-click in Hierarchy: `UI → SVList`.
+2. Item 脚本继承 `SVItemBase<T>`，只重写 `OnBind` 一个方法。Extend `SVItemBase<T>`, implement only `OnBind`.
+3. `view.Initialize(dataList)` 完成。Done.
+
+不等高聊天（高度预计算、顶部加载历史不跳屏、底部跟滚）完整套路见包内 [`Assets/SVList/README.md`](Assets/SVList/README.md)（含可运行的演示场景 `Assets/SVList/Examples/Scenes/SVListChatDemo.unity`）。
+
+For a variable-height chat list (height pre-computation, jump-free history prepend, bottom auto-scroll), see the in-package quick guide [`Assets/SVList/README.md`](Assets/SVList/README.md) and the runnable demo scene `Assets/SVList/Examples/Scenes/SVListChatDemo.unity`.
+
+以下为手动搭建路径（1.0.x 兼容）。The sections below are the manual path (1.0.x-compatible).
 
 ### 1. 场景搭建 / Scene Setup
 
@@ -414,6 +427,18 @@ Assets/
       Utils/                SVUtils.cs
     Editor/
       SVListViewEditor.cs
+      SVListHierarchyMenu.cs        1.1.0: 一键创建层级（垂直/聊天/水平）
+      SVListDemoSceneBuilder.cs     1.1.0: 重建聊天演示场景
+    Examples/                       1.1.0: 演示（单独 asmdef, 依赖 TMP）
+      Scenes/SVListChatDemo.unity   不等高聊天演示场景
+      Prefabs/ChatItemExample.prefab
+      Fonts/ChatFont SDF.asset      中文动态字体
+      Scripts/ChatExample.cs, ChatItemExample.cs
+      SVListChatDemo.cs             场景驱动（标准 API 套路）
+    Tests/EditMode/                 1.1.0: 17 项 EditMode 单元测试
+    README.md                       1.1.0: 包内快速上手（兼聊天接入指南）
+    CHANGELOG.md
+    LICENSE.md
   Prefabs/                  Demo 预制体
   Scripts/
     Core/                   DemoInitializer.cs

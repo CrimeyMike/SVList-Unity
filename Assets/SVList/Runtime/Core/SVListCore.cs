@@ -52,6 +52,13 @@ namespace SVList
         /// <summary>滚动位置更新回调</summary>
         public Action<float> OnScrollPositionChanged;
 
+        /// <summary>
+        /// 滚动位置增量平移回调（插入/删除补偿专用）。
+        /// 与 OnScrollPositionChanged 的区别：走 content 增量平移而非 normalizedPosition，
+        /// 不会清掉 ScrollRect 的惯性速度（normalized setter 内部会 m_Velocity=0）。
+        /// </summary>
+        public Action<float> OnScrollOffsetShift;
+
         /// <summary>调试信息更新回调</summary>
         public Action<DebugInfo> OnDebugInfoUpdated;
 
@@ -96,6 +103,24 @@ namespace SVList
         public void Initialize(SVConfig config, ISVDataSource dataSource,
             SVObjectPoolManager poolManager, Transform contentTransform)
         {
+            // 幂等保护：重复 Initialize 时先回收上一轮的活跃元素与队列，
+            // 否则旧 item 变孤儿挂在 Content 下，与新 item 重叠显示
+            if (_state.Status == SVListStatus.Running)
+            {
+                _tempItemList.Clear();
+                if (_itemContainer != null)
+                {
+                    foreach (var item in _itemContainer.GetActiveItems())
+                        _tempItemList.Add(item);
+                    foreach (var item in _tempItemList)
+                        RecycleItem(item);
+                    _itemContainer.Clear();
+                }
+                _instantiateScheduler?.Clear();
+                _recycleScheduler?.Clear();
+                _state.Reset();
+            }
+
             _config = config;
             _poolManager = poolManager;
             _contentTransform = contentTransform;
@@ -106,11 +131,18 @@ namespace SVList
             float estimateHeight = config.EstimateHeight > 0f ? config.EstimateHeight : 100f;
             _heightCache = new SVHeightCache(estimateHeight);
 
+            // 自动识别数据源实现的高度提供者
+            if (HeightProvider == null && dataSource is ISVItemHeightProvider provider)
+            {
+                HeightProvider = provider;
+            }
+
             // 初始化数据计数
             int totalCount = dataSource.GetItemCount();
             _state.TotalCount = totalCount;
 
-            // Grid 动态行高：HeightCache 按行数初始化（每行一个高度记录）
+            // Grid 动态行高：HeightCache 按行数初始化（每行一个高度记录）；
+            // Provider 按 item 粒度提供高度，不适用于 Grid 行高，Grid 保持估算
             if (config.Direction == SVDirection.Grid && config.GridCellHeight <= 0f)
             {
                 int rowCount = (totalCount + config.GridColumnCount - 1) / Mathf.Max(1, config.GridColumnCount);
@@ -118,7 +150,8 @@ namespace SVList
             }
             else
             {
-                _heightCache.Initialize(totalCount);
+                _heightCache.Initialize(totalCount,
+                    _cachedHeightGetter);
             }
 
             // 创建布局
@@ -369,6 +402,9 @@ namespace SVList
         /// </summary>
         private void CreateAndBindItem(int index, int prefabID)
         {
+            // 无对象池（纯逻辑/单测环境）：跳过实例化，仅维持数据层一致性
+            if (_poolManager == null) return;
+
             // 从对象池获取，设置父节点为 Content
             ISVItemRenderer renderer = _poolManager.Get(prefabID, _contentTransform);
             if (renderer == null) return;
@@ -434,8 +470,10 @@ namespace SVList
                 activeItem.SetActive(index, prefabID, rect, renderer, mb.gameObject);
                 _itemContainer.Add(index, activeItem);
 
-                // 更新高度（动态高度模式）
-                if (_config.DynamicHeight)
+                // 更新高度（动态高度模式）。
+                // Provider 已给出精确高度的条目跳过 renderer 复核：
+                // TMP GetPreferredValues 每次调用都有 GC 分配与 CPU 成本，滚动热路径应省掉
+                if (_config.DynamicHeight && !IsHeightExactFromProvider(index))
                 {
                     UpdateItemHeight(index, renderer);
                 }
@@ -518,8 +556,17 @@ namespace SVList
                 // 更新受影响 Item 的位置和高度
                 UpdatePositionsFrom(index + 1);
 
-                // 标记需要更新 ContentSize
+                // 先更新 ContentSize 再做滚动补偿，保证 MaxScrollOffset 是最新值
                 _state.Dirty = true;
+                UpdateContentSize();
+
+                // ★ 被修正的 Item 完全位于视口上方时，其高度变化会整体平移下方所有内容，
+                //   同步平移滚动偏移消除"上方测量导致的画面跳动"（无 Provider 的估算模式兜底）
+                float itemStart = _layout.GetItemStartOffset(index);
+                if (_state.ScrollOffset > 0f && itemStart + preferredHeight <= _state.ScrollOffset + 0.5f)
+                {
+                    ApplyScrollOffset(_state.ScrollOffset + delta, true);
+                }
             }
         }
 
@@ -533,6 +580,16 @@ namespace SVList
                 // 在锚点之前发生变化，需要补偿
                 _state.AnchorOffset += delta;
             }
+        }
+
+        /// <summary>
+        /// 该条高度是否已由 Provider 精确提供（是则无需 renderer 测量复核）
+        /// </summary>
+        private bool IsHeightExactFromProvider(int index)
+        {
+            if (_heightProvider == null) return false;
+            var info = _heightCache.GetInfo(index);
+            return info != null && info.IsMeasured;
         }
 
         /// <summary>
@@ -650,7 +707,8 @@ namespace SVList
             }
             else
             {
-                _heightCache.Initialize(totalCount);
+                _heightCache.Initialize(totalCount,
+                    _cachedHeightGetter);
             }
 
             // 重新创建布局
@@ -681,7 +739,7 @@ namespace SVList
                     object data = dataSource.GetItemData(index);
                     item.Renderer.OnBind(data, index);
 
-                    if (_config.DynamicHeight)
+                    if (_config.DynamicHeight && !IsHeightExactFromProvider(index))
                     {
                         UpdateItemHeight(index, item.Renderer);
                     }
@@ -690,43 +748,238 @@ namespace SVList
         }
 
         /// <summary>
-        /// 插入数据
+        /// 插入数据（单条，等价于 InsertItems(index, 1)）
         /// </summary>
         public void InsertItem(int index)
         {
-            if (_state.Status != SVListStatus.Running) return;
-
-            _heightCache.Insert(index);
-            _state.TotalCount++;
-
-            // 调整已有活跃元素的索引
-            _itemContainer.ShiftIndices(index, 1);
-
-            _state.Dirty = true;
-            Refresh();
+            InsertItems(index, 1);
         }
 
         /// <summary>
-        /// 删除数据
+        /// 批量插入数据（调用前数据源需已完成插入）
+        ///
+        /// 增量更新高度缓存与活跃元素索引，不做全量重建、不丢已测量高度。
+        /// 插入点位于视口上方（含顶部加载历史）时自动平移滚动位置，画面保持不动。
+        /// </summary>
+        public void InsertItems(int index, int count)
+        {
+            if (_state.Status != SVListStatus.Running || count <= 0) return;
+            if (index < 0 || index > _state.TotalCount) return;
+
+            // Grid 不支持增量（改动点可能落在行中间）：退化为全量刷新
+            if (_config.Direction == SVDirection.Grid)
+            {
+                _state.TotalCount += count;
+                Refresh();
+                return;
+            }
+
+            // 1. 高度缓存批量插入（有 Provider 时直接写入精确高度，用缓存委托避免 GC）
+            float itemsSize = _heightCache.InsertRange(index, count, _cachedHeightGetter);
+            float shift = _layout.GetInsertShift(count, itemsSize);
+
+            _state.TotalCount += count;
+
+            // 2. 已有活跃元素索引平移
+            _itemContainer.ShiftIndices(index, count);
+
+            // 3. 可见范围记录同步平移（_prevOffset 一并平移，避免补偿被误判为滚动速度尖峰）
+            _visibleManager.ShiftIndices(index, count, shift);
+            ShiftStateVisibleIndices(index, count);
+
+            // 4. 平移改动点之后活跃元素的位置
+            UpdatePositionsFrom(index);
+
+            // 5. 更新 ContentSize 并下发给 ScrollRect（补偿依赖最新的 MaxScrollOffset）
+            _state.Dirty = true;
+            UpdateContentSize();
+
+            // 6. 视口补偿：插入点在视口顶部或上方 → 滚动偏移平移同等距离，画面不动。
+            //    优先走增量平移通道（保住用户惯性），无 ScrollRect 环境回落绝对定位
+            float insertStart = _layout.GetItemStartOffset(index);
+            if (insertStart <= _state.ScrollOffset + 0.5f)
+            {
+                CompensateByShift(shift);
+            }
+            else
+            {
+                OnScrollChanged(_state.ScrollOffset);
+            }
+
+            // 7. 补洞：Diff 只比较区间边界，插入点落在视口内部时中间缺的索引由这里补齐
+            FillRangeHoles(CurrentVisibleRange);
+        }
+
+        /// <summary>
+        /// 删除数据（单条，等价于 RemoveItems(index, 1)）
         /// </summary>
         public void RemoveItem(int index)
         {
-            if (_state.Status != SVListStatus.Running) return;
+            RemoveItems(index, 1);
+        }
 
-            // 如果该索引有活跃元素，先回收
-            if (_itemContainer.TryGet(index, out ActiveItem item))
+        /// <summary>
+        /// 批量删除数据（调用前数据源需已完成删除）
+        ///
+        /// 增量更新；删除点位于视口上方时自动回退滚动偏移，画面保持不动。
+        /// </summary>
+        public void RemoveItems(int index, int count)
+        {
+            if (_state.Status != SVListStatus.Running || count <= 0) return;
+            if (index < 0 || index >= _state.TotalCount) return;
+            if (count > _state.TotalCount - index) count = _state.TotalCount - index;
+
+            // Grid 不支持增量：退化为全量刷新
+            if (_config.Direction == SVDirection.Grid)
             {
-                RecycleItem(item);
+                _state.TotalCount -= count;
+                Refresh();
+                return;
             }
 
-            _heightCache.Remove(index);
-            _state.TotalCount--;
+            // 1. 回收被删区间的活跃元素（此时索引还有效）
+            for (int i = index + count - 1; i >= index; i--)
+            {
+                if (_itemContainer.TryGet(i, out ActiveItem removed))
+                {
+                    RecycleItem(removed);
+                }
+            }
 
-            // 调整已有活跃元素的索引
-            _itemContainer.ShiftIndices(index + 1, -1);
+            // 2. 高度缓存批量删除，返回被删高度供补偿
+            float removedSize = _heightCache.RemoveRange(index, count);
+            float shift = _layout.GetInsertShift(count, removedSize);
 
+            _state.TotalCount -= count;
+
+            // 3. 后续元素索引左移
+            _itemContainer.ShiftIndices(index + count, -count);
+
+            // 4. 可见范围记录同步平移
+            _visibleManager.ShiftIndices(index, -count, -shift);
+            ShiftStateVisibleIndices(index, -count);
+
+            // 5. 平移剩余活跃元素位置
+            UpdatePositionsFrom(index);
+
+            // 6. 更新 ContentSize
             _state.Dirty = true;
-            Refresh();
+            UpdateContentSize();
+
+            // 7. 视口补偿：删除点在视口上方 → 滚动偏移回退同等距离（同样走增量通道保惯性）
+            float removeStart = _layout.GetItemStartOffset(index);
+            if (removeStart < _state.ScrollOffset - 0.5f)
+            {
+                CompensateByShift(-shift);
+            }
+            else
+            {
+                OnScrollChanged(_state.ScrollOffset);
+            }
+
+            FillRangeHoles(CurrentVisibleRange);
+        }
+
+        /// <summary>最大可滚动偏移（ContentSize - ViewportSize）</summary>
+        public float MaxScrollOffset => Mathf.Max(0f, _state.ContentSize - _state.ViewportSize);
+
+        /// <summary>是否停在底部（threshold 为距底部像素阈值，聊天用它决定新消息是否自动跟滚）</summary>
+        public bool IsAtBottom(float threshold = 16f)
+        {
+            return _state.ScrollOffset >= MaxScrollOffset - threshold;
+        }
+
+        /// <summary>滚动到指定偏移（立即）</summary>
+        public void ScrollToOffset(float offset)
+        {
+            if (_state.Status != SVListStatus.Running) return;
+            ApplyScrollOffset(offset, true);
+        }
+
+        /// <summary>滚动到底部（立即，不播动画）</summary>
+        public void ScrollToBottom()
+        {
+            ScrollToOffset(MaxScrollOffset);
+        }
+
+        /// <summary>
+        /// 应用滚动偏移：先推送给 ScrollRect（由 onValueChanged 回流），
+        /// 再同步刷新一次内部可见区——ScrollRect 的回调可能推迟到 LateUpdate，双保险。
+        /// OnScrollChanged 幂等，重复计算无副作用。
+        /// </summary>
+        private void ApplyScrollOffset(float newOffset, bool notifyScrollRect)
+        {
+            newOffset = Mathf.Clamp(newOffset, 0f, MaxScrollOffset);
+
+            if (notifyScrollRect && OnScrollPositionChanged != null)
+            {
+                OnScrollPositionChanged.Invoke(newOffset);
+            }
+
+            OnScrollChanged(newOffset);
+        }
+
+        /// <summary>
+        /// 插入/删除的视口补偿（增量通道）：
+        /// 有 ScrollRect 时走 content 增量平移（不清惯性速度），否则回落绝对定位。
+        /// </summary>
+        private void CompensateByShift(float shift)
+        {
+            float target = Mathf.Clamp(_state.ScrollOffset + shift, 0f, MaxScrollOffset);
+            float actual = target - _state.ScrollOffset;
+            if (Mathf.Abs(actual) < 0.01f) return;
+
+            _state.ScrollOffset = target;
+
+            if (OnScrollOffsetShift != null)
+            {
+                // 回流链：ShiftScrollOffset → OnScrollOffsetChanged → OnScrollChanged（幂等）
+                OnScrollOffsetShift.Invoke(actual);
+            }
+
+            OnScrollChanged(_state.ScrollOffset);
+        }
+
+        /// <summary>
+        /// 数据增删后平移 State 中记录的可见索引，保持与实际一致
+        /// </summary>
+        private void ShiftStateVisibleIndices(int fromIndex, int delta)
+        {
+            _state.PrevFirstVisibleIndex = ShiftIndex(_state.PrevFirstVisibleIndex, fromIndex, delta);
+            _state.PrevLastVisibleIndex = ShiftIndex(_state.PrevLastVisibleIndex, fromIndex, delta);
+            _state.FirstVisibleIndex = ShiftIndex(_state.FirstVisibleIndex, fromIndex, delta);
+            _state.LastVisibleIndex = ShiftIndex(_state.LastVisibleIndex, fromIndex, delta);
+        }
+
+        private static int ShiftIndex(int index, int fromIndex, int delta)
+        {
+            return index >= fromIndex ? index + delta : index;
+        }
+
+        /// <summary>
+        /// 确保可见区间内每个索引都有活跃元素。
+        /// Diff 只比较区间边界，插入点落在视口内部时中间会缺索引，由这里补齐创建。
+        /// </summary>
+        private void FillRangeHoles(VisibleRange range)
+        {
+            if (range.First < 0) return;
+            for (int i = range.First; i <= range.Last; i++)
+            {
+                if (!_itemContainer.Contains(i))
+                {
+                    _instantiateScheduler.Enqueue(i, GetPrefabID(i));
+                }
+            }
+        }
+
+        /// <summary>
+        /// 获取指定索引当前活跃的 Renderer（该条不可见时返回 null）
+        /// </summary>
+        public ISVItemRenderer GetRenderer(int index)
+        {
+            return _itemContainer != null && _itemContainer.TryGet(index, out ActiveItem item)
+                ? item.Renderer
+                : null;
         }
 
         /// <summary>
@@ -784,6 +1037,26 @@ namespace SVList
         /// 获取数据源（通过外部注册）
         /// </summary>
         public Func<ISVDataSource> DataSourceProvider { get; set; }
+
+        /// <summary>
+        /// 高度预计算提供者（可选）。
+        /// 提供后 Item 未实例化即知精确高度：初始化/插入无估算误差，
+        /// 头部插入历史数据的视口补偿可做到零跳动。
+        /// 若数据源自身实现 ISVItemHeightProvider，Initialize 时会自动识别。
+        /// </summary>
+        public ISVItemHeightProvider HeightProvider
+        {
+            get => _heightProvider;
+            set
+            {
+                _heightProvider = value;
+                // 缓存委托：方法组转换每次求值都会分配新委托，插入高频时是稳定 GC 源
+                _cachedHeightGetter = value != null ? value.GetItemHeight : null;
+            }
+        }
+
+        private ISVItemHeightProvider _heightProvider;
+        private Func<int, float> _cachedHeightGetter;
 
         private ISVDataSource GetDataSource()
         {

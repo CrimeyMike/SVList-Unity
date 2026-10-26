@@ -196,5 +196,30 @@ namespace SVList
             }
             return row;
         }
+
+        /// <summary>
+        /// Grid 不支持增量插入/删除（改动点可能落在行中间），
+        /// Core 对 Grid 模式退化为全量 Refresh，此实现仅保证接口完整。
+        /// </summary>
+        public float GetItemStartOffset(int index)
+        {
+            int row = index / _columnCount;
+            float yOffset;
+            if (_cellHeight > 0f)
+            {
+                yOffset = row * (_cellHeight + _verticalSpacing);
+            }
+            else
+            {
+                yOffset = _heightCache.GetOffset(row) + row * _verticalSpacing;
+            }
+            return _paddingTop + yOffset;
+        }
+
+        public float GetInsertShift(int count, float itemsSize)
+        {
+            // 粗略近似：仅按 item 数量摊算行距；增量路径不使用（Grid 走全量刷新）
+            return itemsSize + count * _verticalSpacing;
+        }
     }
 }

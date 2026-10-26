@@ -5,7 +5,9 @@
         "SVList.Runtime",
         "UnityEngine.CoreModule",
         "UnityEngine.UI",
-        "UnityEditor.CoreModule"
+        "UnityEditor.CoreModule",
+        "Unity.TextMeshPro",
+        "SVList.Examples"
     ],
     "includePlatforms": [
         "Editor"

@@ -1,0 +1,17 @@
+{
+    "name": "SVList.Examples",
+    "rootNamespace": "SVList.Examples",
+    "references": [
+        "SVList.Runtime",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
