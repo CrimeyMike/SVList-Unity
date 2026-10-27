@@ -2,11 +2,13 @@
 
 高性能 UGUI 虚拟化滚动列表：视口复用 + 对象池 + 树状数组定位，支持**不等高 Item**、**头部插入历史不跳屏**、**高度预计算**，适合聊天、邮件、排行榜、战报等长列表。
 
-> 本目录是基于 [CrimeyMike/SVList-Unity](https://github.com/CrimeyMike/SVList-Unity)（MIT）的二次开发版本，优化内容见文末[变更记录](#变更记录)。
+> **安装（UPM）**：`Window → Package Manager → + → Add package from git URL…` 输入
+> `https://github.com/CrimeyMike/SVList-Unity.git?path=/Assets/SVList`（也可直接把本目录拷入项目 Assets 下任意位置）。
+> 完整特性 / 架构 / 性能说明见[仓库根 README](https://github.com/CrimeyMike/SVList-Unity#readme)；1.1.0 起的增量变更见文末[变更记录](#变更记录)。
 
 ## 演示场景（建议先跑一遍）
 
-打开 `Examples/Scenes/SVListChatDemo.unity`（相对包根，本项目中即 `Assets/ThirdParty/SVList/Examples/Scenes/`）直接 Play：联盟聊天，不等高中文消息、滚到顶自动加载一页历史（画面不跳）、在底部时发送自动跟滚、左上角实时统计（总数/活跃/池/Offset/可见区间）。
+打开包内 `Examples/Scenes/SVListChatDemo.unity`（UPM 安装时位于 Project 窗口 `Packages/com.svlist.unity` 下，拷贝安装时位于包目录下）直接 Play：联盟聊天，不等高中文消息、滚到顶自动加载一页历史（画面不跳）、在底部时发送自动跟滚、左上角实时统计（总数/活跃/池/Offset/可见区间）。Package 缓存中的场景可直接打开试跑；若要改动，先把场景拷贝进自己的项目。
 
 演示用的是**标准接入形态**，可直接照抄：
 
@@ -35,14 +37,15 @@
 
 生成的 `ScrollRect / Viewport / Content` 锚点已按库要求搭好（Content 顶部锚定是最常见的接入错误，菜单已代劳）。
 
-**第 2 步：写 Item 脚本**（继承 `SVItemBase<T>`，只重写 `OnBind` 一个方法）：
+**第 2 步：写 Item 脚本**（继承 `SVItemBase<T>`，只重写 `OnBind` 一个方法）。
+泛型参数 `T` 是**你自己的数据类型**——示例里的 `ChatMessage` 即任意业务消息类（包内示例定义在 `Examples/Scripts/ChatExample.cs`，位于 `SVList.Examples` 命名空间；注意与项目内同名类型区分，直接引用包内示例类型需 `using SVList.Examples`）：
 
 ```csharp
 using TMPro;
 using UnityEngine;
 using SVList;
 
-public class ChatItem : SVItemBase<ChatMessage>
+public class ChatItem : SVItemBase<ChatMessage>   // ChatMessage：任意你自己的数据类型
 {
     [SerializeField] private TMP_Text _nameText;
     [SerializeField] private TMP_Text _msgText;
@@ -57,10 +60,13 @@ public class ChatItem : SVItemBase<ChatMessage>
 
 做成预制体，挂回 `SVListView` 的 **Item Prefabs** 列表（第 0 个 = PrefabID 0）。
 
-**第 3 步：初始化：**
+**第 3 步：初始化**（`view` 是列表物体上的 `SVListView` 组件，`[SerializeField]` 拖引用或 `GetComponent` 获取）：
 
 ```csharp
-view.Initialize(messages);   // messages : IList<ChatMessage>
+[SerializeField] private SVListView _view;        // 场景中 SVList 物体上的 SVListView
+[SerializeField] private List<ChatMessage> _messages;
+
+void Start() => _view.Initialize(_messages);      // messages : IList<T>
 ```
 
 完成。增删数据、滚动控制的 API 见下文。
@@ -68,7 +74,8 @@ view.Initialize(messages);   // messages : IList<ChatMessage>
 ### 纯代码路径（无预制体）
 
 ```csharp
-// 先建好 ScrollRect/Viewport/Content 层级（参考 SVListChatDemo.BuildUi）
+// 先建好 ScrollRect/Viewport/Content 层级（结构同第 1 步菜单生成物：
+// ScrollRect + Viewport(RectMask2D + 透明 Image 承接射线) + Content(顶部锚定)）
 view.RegisterItemPrefab(itemTemplate);   // 运行时注册模板，PrefabID = 0
 view.Initialize(dataSource);
 ```
