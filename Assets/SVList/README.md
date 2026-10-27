@@ -23,6 +23,18 @@
 
 场景被误改后可用菜单 `Tools → SVList → 重建聊天演示场景` 一键重建。
 
+## 列表模板（最快路径）
+
+`Examples/Templates/` 下有三个**开箱即用**的完整列表模板 prefab（层级 + 配置 + Item Prefab + 驱动脚本全部接好线），拖进 Canvas 下直接 Play：
+
+| 模板 | 用途 |
+|---|---|
+| `VerticalListTemplate` | 等高垂直列表（`SimpleListDriver`，1000 条示例数据） |
+| `HorizontalListTemplate` | 等高水平列表 |
+| `ChatListTemplate` | 不等高聊天（`ChatListDriver`，长短句示例，自动滚到底） |
+
+改数据看同目录驱动脚本；模板误改后用菜单 `Tools → SVList → 重建列表模板` 重建。以下为从零接入的完整路径。
+
 ---
 
 ## 30 秒接入（推荐路径）

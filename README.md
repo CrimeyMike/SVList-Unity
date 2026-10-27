@@ -117,82 +117,78 @@ SVListView (MonoBehaviour 薄壳入口)
 
 ## 快速开始 / Quick Start
 
-### 0. 最快路径（1.1.0+） / Fastest Path
+### 方式一：拖模板，开箱即 Play（推荐）/ Option 1: Drag a template (recommended)
 
-1. Hierarchy 右键 `UI → SVList` 一键创建（垂直 / 聊天 / 水平三种预设，锚点与射线承接已配好）。Right-click in Hierarchy: `UI → SVList`.
-2. Item 脚本继承 `SVItemBase<T>`，只重写 `OnBind` 一个方法。Extend `SVItemBase<T>`, implement only `OnBind`.
-3. `view.Initialize(dataList)` 完成。Done.
+把 `Examples/Templates/` 下的模板 prefab 拖进 Canvas 下，直接 Play：
 
-不等高聊天（高度预计算、顶部加载历史不跳屏、底部跟滚）完整套路见包内 [`Assets/SVList/README.md`](Assets/SVList/README.md)（含可运行的演示场景 `Assets/SVList/Examples/Scenes/SVListChatDemo.unity`）。
+Drag a template prefab from `Examples/Templates/` under your Canvas and press Play:
 
-For a variable-height chat list (height pre-computation, jump-free history prepend, bottom auto-scroll), see the in-package quick guide [`Assets/SVList/README.md`](Assets/SVList/README.md) and the runnable demo scene `Assets/SVList/Examples/Scenes/SVListChatDemo.unity`.
+| 模板 / Template | 内容 / Contents |
+|---|---|
+| `VerticalListTemplate` | 等高垂直列表：`SimpleListItem` + `SimpleListDriver`（1000 条示例数据） |
+| `HorizontalListTemplate` | 等高水平列表：同上，横向排列 |
+| `ChatListTemplate` | 不等高聊天：`ChatItemExample` + `ChatListDriver`（长短句示例，自动滚到底） |
 
-以下为手动搭建路径（1.0.x 兼容）。The sections below are the manual path (1.0.x-compatible).
+模板包含完整可用的层级（ScrollRect / Viewport / Content、锚点与射线承接）、已挂接的 Item Prefab 与驱动脚本。改数据看同目录的 `SimpleListDriver` / `ChatListDriver`，改样式看 `SimpleListItem`。模板被误改后可用菜单 `Tools → SVList → 重建列表模板` 一键重建。
 
-### 1. 场景搭建 / Scene Setup
+Each template is a fully wired hierarchy with its item prefab and driver script attached. Edit `SimpleListDriver` / `ChatListDriver` for data, `SimpleListItem` for visuals. Menu `Tools → SVList → Rebuild list templates` regenerates them.
 
-1. 在场景中创建一个 Canvas。
-2. 在 Canvas 下添加带有 Viewport 和 Content 子节点的 ScrollRect。
-3. 将 `SVListView` 组件挂载到 ScrollRect 所在的 GameObject 上。
-4. 在 Inspector 中拖入 ScrollRect、Viewport、Content 的引用。
-5. 将一个或多个 Item Prefab 添加到 Item Prefabs 列表中。
+### 方式二：一键菜单 + 三步接入 / Option 2: Menu + 3 steps
 
-### 2. Item Prefab
+**第 1 步：一键创建层级。** Hierarchy 右键 `UI → SVList`，按需选择垂直 / 聊天（不等高）/ 水平预设（锚点与射线承接已配好）。Right-click in Hierarchy: `UI → SVList`.
 
-你的 Item Prefab 必须实现 `ISVItemRenderer` 接口，或继承提供的基类：
-
-Your item prefab must implement `ISVItemRenderer`, or extend the provided base class:
+**第 2 步：写 Item 脚本**（继承 `SVItemBase<T>`，只重写 `OnBind`；`T` 是**任意你自己的数据类型**，无约束）：
 
 ```csharp
-using SVList;
-using UnityEngine;
-using UnityEngine.UI;
 using TMPro;
+using UnityEngine;
+using SVList;
 
-public class MyItemRenderer : SVItemRendererBase
+public class MyData { public string Title; }   // 任意你自己的数据类型
+
+public class MyItem : SVItemBase<MyData>
 {
-    [SerializeField] private TMP_Text _nameText;
-    [SerializeField] private TMP_Text _valueText;
-    [SerializeField] private Image _icon;
+    [SerializeField] private TMP_Text _titleText;
 
-    public override void OnBind(object data, int index)
-    {
-        base.OnBind(data, index);
-        var item = data as MyData;
-        if (item == null) return;
-
-        _nameText.text = item.Name;
-        _valueText.text = item.Value.ToString();
-        _icon.sprite = item.Icon;
-    }
+    protected override void OnBind(MyData data, int index)
+        => _titleText.text = $"{index:000} · {data.Title}";
 }
 ```
 
-### 3. 初始化 / Initialize
+做成 prefab，拖进 `SVListView` 的 **Item Prefabs** 列表（第 0 个 = PrefabID 0）。Turn it into a prefab and drop it into the **Item Prefabs** list.
+
+**第 3 步：驱动脚本初始化**（`view` 是列表物体上的 `SVListView`，`[SerializeField]` 拖引用）：
 
 ```csharp
-using SVList;
 using System.Collections.Generic;
 using UnityEngine;
+using SVList;
 
-public class Demo : MonoBehaviour
+public class MyListDriver : MonoBehaviour
 {
-    [SerializeField] private SVListView _listView;
+    [SerializeField] private SVListView _view;
 
     void Start()
     {
-        // 生成 10 万条数据
         var data = new List<MyData>();
-        for (int i = 0; i < 100_000; i++)
-            data.Add(new MyData { Name = $"Item {i}", Value = i * 100 });
+        for (int i = 0; i < 100_000; i++) data.Add(new MyData { Title = $"Item {i}" });
 
-        _listView.Initialize(data);
+        _view.Initialize(data);
 
         // 多模板: 通过 prefabSelector 返回不同 Prefab ID
-        // _listView.Initialize(data, index => index == 0 ? 0 : 1);
+        // _view.Initialize(data, index => index == 0 ? 0 : 1);
     }
 }
 ```
+
+### 层级说明与常见坑 / Hierarchy notes
+
+- **引用自动派生，无需手拖**：`SVListView` 挂在带 `ScrollRect` 的物体上后，ScrollRect / Viewport / Content 引用在 `Awake` 自动获取——只要 `ScrollRect` 自身的 `viewport` / `content` 指好即可。References are auto-derived in `Awake`.
+- **Viewport 必须有 `raycastTarget` 的 Graphic**（`RectMask2D` 不参与射线），否则列表拖不动；菜单与模板已带透明 Image。手搭层级时注意。
+- **Content 锚定**：垂直列表顶部锚定、水平列表左侧锚定（菜单与模板已搭好，自检会对错误锚点告警）。
+- **自定义 asmdef**：工程内程序集引用 SVList 需在 asmdef 中添加 `SVList.Runtime`（`Assembly-CSharp` 无需处理）。
+- 不等高聊天进阶（高度预计算、顶部加载历史不跳屏、底部跟滚）完整套路见包内 [`Assets/SVList/README.md`](Assets/SVList/README.md) 与可运行演示场景 `Examples/Scenes/SVListChatDemo.unity`。
+- 1.0 的 `ISVItemRenderer` / `SVItemRendererBase`（弱类型 `OnBind(object)`）写法仍受支持，见「接口 / Interfaces」章节。
 
 ---
 
@@ -429,11 +425,18 @@ Assets/
       SVListViewEditor.cs
       SVListHierarchyMenu.cs        1.1.0: 一键创建层级（垂直/聊天/水平）
       SVListDemoSceneBuilder.cs     1.1.0: 重建聊天演示场景
+      SVListTemplateGenerator.cs    1.1.0: 重建列表模板（Templates/）
     Examples/                       1.1.0: 演示（单独 asmdef, 依赖 TMP）
       Scenes/SVListChatDemo.unity   不等高聊天演示场景
       Prefabs/ChatItemExample.prefab
       Fonts/ChatFont SDF.asset      中文动态字体
       Scripts/ChatExample.cs, ChatItemExample.cs
+      Templates/                    开箱即用列表模板（拖进 Canvas 即 Play）
+        SimpleListItem.prefab       等高 Item（背景 + 文本）
+        VerticalListTemplate.prefab      垂直（SimpleListDriver 1000 条）
+        HorizontalListTemplate.prefab    水平
+        ChatListTemplate.prefab          不等高聊天（ChatListDriver）
+        SimpleListItemData/SimpleListItem/SimpleListDriver/ChatListDriver.cs  最小示例脚本
       SVListChatDemo.cs             场景驱动（标准 API 套路）
     Tests/EditMode/                 1.1.0: 17 项 EditMode 单元测试
     README.md                       1.1.0: 包内快速上手（兼聊天接入指南）

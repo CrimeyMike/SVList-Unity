@@ -11,6 +11,7 @@ All notable changes to SVList will be documented in this file.
 - `SVItemBase<T>` convenience base class — implement only `OnBind` instead of the 5-method renderer interface
 - Setup self-check: actionable errors for missing Viewport / wrong Content anchors / unregistered item templates
 - Hierarchy one-click creation menu (`GameObject/UI/SVList`: vertical / chat / horizontal presets); generated Viewport carries a transparent raycast-target Image so the list is draggable out of the box
+- Out-of-the-box list templates in `Examples/Templates/` (`VerticalListTemplate` / `HorizontalListTemplate` / `ChatListTemplate` + `SimpleListItem`): fully wired hierarchies with item prefab and minimal driver scripts attached — drag under a Canvas and press Play; regenerable via `Tools → SVList → Rebuild list templates`
 - Prefab-based chat demo scene (in-package, `Examples/Scenes/`), in-package Chinese dynamic TMP font asset, and `Tools → SVList → Rebuild Chat Demo Scene` rebuild tool; all asset paths are derived from the script location, so the package works at any install path
 - 17 EditMode unit tests (Fenwick tree / height cache / insert-compensation behavior)
 

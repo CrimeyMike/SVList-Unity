@@ -118,7 +118,7 @@ namespace SVList.EditorTools
             Debug.Log($"[SVList] 已创建 {name}。下一步：\n" +
                       "1. 写一个继承 SVItemBase<T> 的 Item 脚本挂到模板预制体上（只需重写 OnBind）\n" +
                       "2. 把预制体拖进 SVListView 的 Item Prefabs（多模板按顺序，PrefabSelector 返回下标）\n" +
-                      "3. 代码里 view.Initialize(数据源) —— 详细见 Assets/ThirdParty/SVList/README.md");
+                      "3. 代码里 view.Initialize(数据源) —— 详细见包内 README.md；开箱即用模板见 Examples/Templates/");
         }
 
         private static void StretchFull(RectTransform rt)
