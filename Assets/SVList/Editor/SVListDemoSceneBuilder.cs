@@ -21,6 +21,7 @@ namespace SVList.EditorTools
     {
         private const string SceneRelPath = "Examples/Scenes/SVListChatDemo.unity";
         private const string PrefabRelPath = "Examples/Prefabs/ChatItemExample.prefab";
+        private const string ImagePrefabRelPath = "Examples/Prefabs/ImageMessageItem.prefab";
         private const string FontAssetRelPath = "Examples/Fonts/ChatFont SDF.asset";
 
         private static string _packageRoot;
@@ -46,6 +47,7 @@ namespace SVList.EditorTools
 
         private static string ScenePath => PackageRoot + "/" + SceneRelPath;
         private static string PrefabPath => PackageRoot + "/" + PrefabRelPath;
+        private static string ImagePrefabPath => PackageRoot + "/" + ImagePrefabRelPath;
         private static string FontAssetPath => PackageRoot + "/" + FontAssetRelPath;
 
         [MenuItem("Tools/SVList/重建聊天演示场景", false, 100)]
@@ -144,12 +146,21 @@ namespace SVList.EditorTools
             return fontAsset;
         }
 
-        /// <summary>生成（或加载已有的）聊天 Item 预制体</summary>
+        /// <summary>加载已有的聊天 Item 预制体；不存在时构建（保证引用稳定，不覆盖）</summary>
         private static GameObject LoadOrCreateItemPrefab(TMP_FontAsset font)
         {
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
             if (existing != null) return existing;
+            return BuildChatItemPrefab(font);
+        }
 
+        /// <summary>构建（覆盖保存）文本消息 Item 预制体。
+        /// 静态布局即所见：Name 顶部整行、Bubble 左缘竖拉伸锚（="他人消息"形态，宽度 BubbleWidth）、
+        /// Msg 在 Bubble 内按内边距拉伸 —— prefab 预览即正确结构；
+        /// IsSelf 的左右翻转属于运行时状态（ChatItemExample.OnBind），不在静态布局里。
+        /// 供「重建聊天演示场景」与「重建列表模板」共用。</summary>
+        public static GameObject BuildChatItemPrefab(TMP_FontAsset font)
+        {
             var item = new GameObject("ChatItemExample", typeof(RectTransform));
 
             var name = UiText("Name", item.transform, "", ChatExampleMetrics.NameFontSize, new Color(0.6f, 0.75f, 0.95f), font);
@@ -161,6 +172,10 @@ namespace SVList.EditorTools
             var bubble = bubbleGo.AddComponent<Image>();
             bubble.color = new Color(0.16f, 0.19f, 0.24f);
             bubble.raycastTarget = false;
+            SetRect(bubble.rectTransform,
+                new Vector2(0f, 0f), new Vector2(0f, 1f),
+                new Vector2(24f, 0f),
+                new Vector2(24f + ChatExampleMetrics.BubbleWidth, -ChatExampleMetrics.NameRowHeight));
 
             var msg = UiText("Msg", bubbleGo.transform, "", ChatExampleMetrics.MsgFontSize, Color.white, font);
             msg.enableWordWrapping = true;
@@ -173,6 +188,38 @@ namespace SVList.EditorTools
             comp.BubbleRect = bubbleGo.GetComponent<RectTransform>();
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(item, PrefabPath);
+            Object.DestroyImmediate(item);
+            return prefab;
+        }
+
+        /// <summary>构建（覆盖保存）图片消息 Item 预制体（模拟表情/图片发送）。
+        /// 静态布局即所见：Name 顶部整行、Picture 左侧定点锚（="他人消息"形态，固定 ImageSize×ImageSize）。
+        /// IsSelf 的左右翻转属于运行时状态（ImageMessageItem.OnBind）。</summary>
+        public static GameObject BuildImageMessagePrefab(TMP_FontAsset font)
+        {
+            var item = new GameObject("ImageMessageItem", typeof(RectTransform));
+
+            var name = UiText("Name", item.transform, "", ChatExampleMetrics.NameFontSize, new Color(0.6f, 0.75f, 0.95f), font);
+            SetRect(name.rectTransform,
+                new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(28f, -36f), new Vector2(-28f, -4f));
+
+            var picGo = new GameObject("Picture", typeof(RectTransform));
+            picGo.transform.SetParent(item.transform, false);
+            var picture = picGo.AddComponent<Image>();
+            picture.color = new Color(0.30f, 0.50f, 0.80f);
+            picture.raycastTarget = false;
+            var picRect = picGo.GetComponent<RectTransform>();
+            picRect.anchorMin = new Vector2(0f, 0.5f);
+            picRect.anchorMax = new Vector2(0f, 0.5f);
+            picRect.pivot = new Vector2(0f, 0.5f);
+            picRect.anchoredPosition = new Vector2(24f, -22f);
+            picRect.sizeDelta = new Vector2(ChatExampleMetrics.ImageSize, ChatExampleMetrics.ImageSize);
+
+            var comp = item.AddComponent<ImageMessageItem>();
+            comp.NameText = name;
+            comp.Picture = picture;
+
+            var prefab = PrefabUtility.SaveAsPrefabAsset(item, ImagePrefabPath);
             Object.DestroyImmediate(item);
             return prefab;
         }

@@ -130,6 +130,9 @@ namespace SVList
             // 注册数据源提供者
             _core.DataSourceProvider = () => _dataSource;
 
+            // v1.2.0：Item 实例化通知 → 转发给高度 Provider 的采集钩子（自校准高度系统）
+            _core.OnItemInstantiated = OnCoreItemInstantiated;
+
             // 注册回调
             _core.OnContentSizeChanged = OnContentSizeChanged;
             _core.OnScrollPositionChanged = OnScrollPositionChanged;
@@ -243,6 +246,27 @@ namespace SVList
             _hasInitializedOnce = true;
         }
 
+        /// <summary>当前 Prefab 选择器（自校准高度系统：按 index 求模板编号）</summary>
+        internal Func<int, int> PrefabSelector => _core?.PrefabSelector;
+
+        private void OnCoreItemInstantiated(ISVItemRenderer renderer, int prefabId)
+        {
+            if (_core?.HeightProvider is ISVTemplateCapture capture)
+                capture.OnItemInstantiated(renderer, prefabId);
+        }
+
+        /// <summary>
+        /// v1.2.0 自校准高度：数据源未提供精确高度且未手动 SetHeightProvider 时，
+        /// 自动挂接 SVAutoHeightProvider（布局指纹探针 + 持久化缓存）。
+        /// </summary>
+        private void EnsureAutoHeightProvider()
+        {
+            if (_dataSource == null || !_config.AutoMeasure) return;
+            if (_core.HeightProvider != null) return;                 // 手动 Provider 优先
+            if (_dataSource is ISVItemHeightProvider) return;         // 数据源自带：走既有自动识别
+            _core.HeightProvider = new SVAutoHeightProvider(this);
+        }
+
         private void LateUpdate()
         {
             if (_core != null && _core.IsInitialized)
@@ -250,6 +274,9 @@ namespace SVList
                 _core.LateUpdate();
                 _profiler?.Update();
             }
+
+            // v1.2.0：高度缓存节流落盘（至少间隔 3s，见 SVPersistentHeightCache）
+            SVPersistentHeightCache.FlushIfDirty((long)(Time.realtimeSinceStartup * 1000f));
         }
 
         private void OnDestroy()
@@ -261,6 +288,9 @@ namespace SVList
 
             _core?.Dispose();
             _poolManager?.Dispose();
+
+            // v1.2.0：退出时把脏的高度缓存落盘
+            SVPersistentHeightCache.Shutdown();
         }
 
         #endregion
@@ -343,6 +373,7 @@ namespace SVList
             if (_scrollController != null)
                 _core.SetViewportSize(_scrollController.ViewportSize);
 
+            EnsureAutoHeightProvider();
             _core.Initialize(_config, _dataSource, _poolManager, _content);
 
             // 立即触发首次渲染
@@ -375,6 +406,7 @@ namespace SVList
             if (_scrollController != null)
                 _core.SetViewportSize(_scrollController.ViewportSize);
 
+            EnsureAutoHeightProvider();
             _core.Initialize(_config, dataSource, _poolManager, _content);
 
             // 立即触发首次渲染
@@ -454,6 +486,17 @@ namespace SVList
         public void SetHeightProvider(ISVItemHeightProvider provider)
         {
             if (_core != null) _core.HeightProvider = provider;
+        }
+
+        /// <summary>
+        /// 预热一段范围的高度（v1.2.0 自校准高度系统）：
+        /// 历史页加载后调用，让整页在滚动前就有精确高度（毫秒级；更大范围请自行分帧）。
+        /// 仅在自动 Provider 生效时有意义，其他情况为空操作。
+        /// </summary>
+        public void PremeasureHeights(int fromInclusive, int toInclusive)
+        {
+            if (_core?.HeightProvider is SVAutoHeightProvider auto)
+                auto.Premeasure(fromInclusive, toInclusive);
         }
 
         /// <summary>

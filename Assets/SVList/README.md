@@ -31,7 +31,7 @@
 |---|---|
 | `VerticalListTemplate` | 等高垂直列表（`SimpleListDriver`，1000 条示例数据） |
 | `HorizontalListTemplate` | 等高水平列表 |
-| `ChatListTemplate` | 不等高聊天（`ChatListDriver`，长短句示例，自动滚到底） |
+| `ChatListTemplate` | 不等高聊天，**双模板**：文本消息 + 图片消息（`ChatListDriver` 按数据类型分发 PrefabID，自动滚到底） |
 
 改数据看同目录驱动脚本；模板误改后用菜单 `Tools → SVList → 重建列表模板` 重建。以下为从零接入的完整路径。
 
@@ -96,9 +96,25 @@ view.Initialize(dataSource);
 
 ## 不等高聊天（重点）
 
-不等高的关键是**高度在实例化之前就要知道**。两条路，可叠加：
+不等高的关键是**高度在实例化之前就要知道**。三档策略，按需选择：
 
-### 方式 A：高度预计算（推荐，零跳动）
+| 档位 | 机制 | 适用 |
+|---|---|---|
+| **自校准（v1.2.0，默认）** | 首个 Item 实例化后自动采集布局指纹（字体/字号/宽度/固定增量），之后每条消息"先查持久化缓存、未命中用离屏探针测量"，跨会话命中 | 任意 TMP 列表，零公式零常量 |
+| 数据层预计算（Provider） | 数据源实现 `ISVItemHeightProvider`，公式手写 | 极复杂布局 / 需要绝对控制 |
+| 估算 + 实测修正 | `EstimateHeight` 起步，实例化后 `MeasureHeight` 修正（视口补偿不跳屏） | 无 TMP / 兜底 |
+
+### 自校准高度（AutoMeasure）如何工作
+
+1. 列表数据源未实现 Provider 且未手动 `SetHeightProvider` 时，`SVConfig.AutoMeasure`（默认开）自动挂接 `SVAutoHeightProvider`。
+2. 每种模板**首个 Item 实例化**后，从真实组件采集布局指纹（动态文本 = 模板内面积最大的 TMP；`FixedDelta` = 实例总高 − 文本高，名字行/内边距等固定部分自动归入）。
+3. 之后每条消息：键 = `FNV-1a(指纹 + 文本)`，先查**持久化缓存**（`persistentDataPath/svlist/`，重启命中），未命中用离屏探针测量并写缓存。
+4. **Inspector 改布局 → 指纹变 → 旧缓存自动不命中**，重新采集，无需任何失效操作。
+5. 历史页加载后可 `view.PremeasureHeights(0, count-1)` 整页预热（毫秒级）。
+
+正文成员启发式：数据对象中名 `text/content/msg/message/body` 的 string 字段/属性（或第一个 string 成员）。复杂模板（多个动态文本）请回退手写 Provider。纯图片等无文本模板自动记为固定高度。无 TextMeshPro 的项目自动裁剪（`UNITY_TEXTMESHPRO_PRESENT` 条件编译）。
+
+### 方式 B：数据层预计算（手写公式，demo 场景演示的进阶路线）
 
 数据源同时实现 `ISVItemHeightProvider`，在数据层用 TMP 把高度量准：
 
@@ -122,7 +138,7 @@ public class ChatDataSource : ISVDataSource, ISVItemHeightProvider
 > ⚠️ **测量一致性**：`GetItemHeight` 的公式（字体、字号、可用宽度、固定附加高度）必须和 Item 预制体里的实际排版完全一致，否则会出现滚动修正跳动。参考 `SVListChatDemo` 的写法。
 > 返回 `<= 0` 表示该条不提供，自动回落 `EstimateHeight` 估算。
 
-### 方式 B：实例化后测量（兜底，无需 Provider）
+### 方式 C：实例化后测量（兜底，无需 Provider）
 
 Item 脚本重写 `MeasureHeight()` 返回真实高度（例如 `LayoutUtility.GetPreferredHeight` 或 TMP 测量）：
 

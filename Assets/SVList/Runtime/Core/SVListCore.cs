@@ -43,6 +43,9 @@ namespace SVList
         /// <summary>Item 创建回调（由 View 层提供）</summary>
         public Func<int, int, ISVItemRenderer> OnCreateItem;
 
+        /// <summary>Item 实例化并绑定后的通知（v1.2.0：自校准高度系统从此采集模板布局指纹）</summary>
+        public Action<ISVItemRenderer, int> OnItemInstantiated;
+
         /// <summary>Item 回收回调</summary>
         public Action<ISVItemRenderer, int> OnRecycleItem;
 
@@ -469,6 +472,9 @@ namespace SVList
                 ActiveItem activeItem = _itemContainer.Allocate();
                 activeItem.SetActive(index, prefabID, rect, renderer, mb.gameObject);
                 _itemContainer.Add(index, activeItem);
+
+                // v1.2.0：通知自动测量系统采集模板布局指纹（无订阅者时零开销）
+                OnItemInstantiated?.Invoke(renderer, prefabID);
 
                 // 更新高度（动态高度模式）。
                 // Provider 已给出精确高度的条目跳过 renderer 复核：

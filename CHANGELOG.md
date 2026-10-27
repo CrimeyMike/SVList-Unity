@@ -2,6 +2,24 @@
 
 All notable changes to SVList will be documented in this file.
 
+## [1.2.0] - 2026-10-27
+
+### Added
+- **Self-calibrating heights** — automatic, exact height pre-computation with zero user formulas:
+  - `SVHeightProbe`: captures a layout fingerprint (font, size, wrap width, rich-text/word-wrap flags, fixed delta) from the first instantiated item of each template. Inspector layout edits are picked up automatically — no constants to keep in sync, and no code-side layout (OnBind never touches sizes anymore)
+  - `SVPersistentHeightCache`: content-addressed height cache keyed by FNV-1a(layout fingerprint + text), with in-memory LRU (100k entries) and throttled binary persistence under `persistentDataPath/svlist/`. Restarts hit the cache (history reload needs no measuring); layout changes change the fingerprint, so stale entries invalidate themselves
+  - `SVAutoHeightProvider`: wires probe + cache into the existing provider channel. Enabled by `SVConfig.AutoMeasure` (default on) whenever the data source implements no `ISVItemHeightProvider` and no manual provider was set — falls back to estimation + post-instantiation correction until the first item of a template has been seen
+  - `SVListView.PremeasureHeights(from, to)`: warm up a page of heights after loading history (milliseconds); used by the chat template driver
+  - Text-member heuristic for arbitrary data types: string field/property named `text`/`content`/`msg`/`message`/`body`, else the first string member; exotic layouts can still fall back to a hand-written provider
+  - Templates without TMP text (e.g. image messages) are captured as fixed-height items automatically
+  - TMP integration is conditionally compiled (`UNITY_TEXTMESHPRO_PRESENT` via asmdef versionDefines); projects without TextMeshPro keep a TMP-free Runtime, AutoMeasure degrades to a no-op
+- Chat example reworked Inspector-first: prefab static layouts are now authoritative (name row top, bubble left-anchored, correct preview), `OnBind` only flips the bubble side for self-messages and fills text; `MeasureHeight` reads the live `rect.width` so Inspector width edits propagate automatically
+- Image message template (`ImageMessageItem`): second chat template (PrefabID 1) selected via `prefabSelector` by data type — demonstrates multi-template dispatch (text vs. image) with the generator wiring both prefabs
+
+### Fixed
+- `ChatListTemplate` item prefab reference (wrong root fileID left the Item Prefabs list empty)
+- Hierarchy-menu completion log pointed at a stale project path
+
 ## [1.1.0] - 2026-10-26
 
 ### Added

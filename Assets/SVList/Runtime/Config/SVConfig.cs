@@ -120,6 +120,9 @@ namespace SVList
         [Tooltip("显示运行时调试面板")]
         public bool ShowDebugPanel = false;
 
+        [Tooltip("自校准高度：数据源未实现 ISVItemHeightProvider 时，自动启用布局指纹探针+持久化高度缓存（v1.2.0）")]
+        public bool AutoMeasure = true;
+
         #endregion
     }
 

@@ -18,7 +18,6 @@ namespace SVList.EditorTools
     {
         private const string TemplatesDir = "Examples/Templates";
         private const string SimpleItemRelPath = TemplatesDir + "/SimpleListItem.prefab";
-        private const string ChatItemRelPath = "Examples/Prefabs/ChatItemExample.prefab";
         private const string FontAssetRelPath = "Examples/Fonts/ChatFont SDF.asset";
 
         private static string _packageRoot;
@@ -56,20 +55,18 @@ namespace SVList.EditorTools
 
             var simpleItem = BuildSimpleItemPrefab(font);
 
-            var chatItem = AssetDatabase.LoadAssetAtPath<GameObject>(PackageRoot + "/" + ChatItemRelPath);
-            if (chatItem == null)
-            {
-                Debug.LogError($"[SVList] 找不到 {ChatItemRelPath}，可先用菜单「重建聊天演示场景」生成后重试。");
-                return;
-            }
+            // 聊天模板 = 双 Item 模板：0 = 文本消息，1 = 图片消息（模拟表情/图片），均强制重建为静态布局正确版
+            var chatItem = SVListDemoSceneBuilder.BuildChatItemPrefab(font);
+            var imageItem = SVListDemoSceneBuilder.BuildImageMessagePrefab(font);
 
             BuildTemplate("VerticalListTemplate", SVDirection.Vertical, chat: false, simpleItem);
             BuildTemplate("HorizontalListTemplate", SVDirection.Horizontal, chat: false, simpleItem);
-            BuildTemplate("ChatListTemplate", SVDirection.Vertical, chat: true, chatItem);
+            BuildTemplate("ChatListTemplate", SVDirection.Vertical, chat: true, chatItem, imageItem);
 
             AssetDatabase.SaveAssets();
             Debug.Log($"[SVList] 列表模板已生成：{PackageRoot}/{TemplatesDir}\n" +
-                      "把模板 prefab 拖进 Canvas 下直接 Play 即可；改数据请看同目录驱动脚本。");
+                      "把模板 prefab 拖进 Canvas 下直接 Play 即可；改数据请看同目录驱动脚本。\n" +
+                      "ChatListTemplate 为双模板：PrefabID 0=文本消息(ChatItemExample)，1=图片消息(ImageMessageItem)。");
         }
 
         #region 资产构建
@@ -127,8 +124,9 @@ namespace SVList.EditorTools
             return prefab;
         }
 
-        /// <summary>完整列表模板：层级 + 配置 + Item Prefab 已挂 + 驱动脚本已接，拖进 Canvas 即 Play</summary>
-        private static void BuildTemplate(string name, SVDirection direction, bool chat, GameObject itemPrefab)
+        /// <summary>完整列表模板：层级 + 配置 + Item Prefab 已挂 + 驱动脚本已接，拖进 Canvas 即 Play。
+        /// 多模板按传入顺序挂接（下标即 PrefabID）。</summary>
+        private static void BuildTemplate(string name, SVDirection direction, bool chat, params GameObject[] itemPrefabs)
         {
             bool isVertical = direction != SVDirection.Horizontal;
 
@@ -192,8 +190,9 @@ namespace SVList.EditorTools
 
             var so = new SerializedObject(view);
             var prefabs = so.FindProperty("_itemPrefabs");
-            prefabs.arraySize = 1;
-            prefabs.GetArrayElementAtIndex(0).objectReferenceValue = itemPrefab;
+            prefabs.arraySize = itemPrefabs.Length;
+            for (int i = 0; i < itemPrefabs.Length; i++)
+                prefabs.GetArrayElementAtIndex(i).objectReferenceValue = itemPrefabs[i];
             so.ApplyModifiedProperties();
             EditorUtility.SetDirty(view);
 

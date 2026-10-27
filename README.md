@@ -48,6 +48,7 @@ SVList is a production-grade virtual scroll list for Unity UGUI. It handles **1,
 | 增量增删 + 视口补偿（头部插入历史不跳屏）/ Incremental insert/remove with viewport compensation | 已实现 / Done |
 | 高度预计算 (ISVItemHeightProvider，消除估算跳动) / Height pre-computation | 已实现 / Done |
 | 聊天 API (IsAtBottom / ScrollToBottom / AppendItems) / Chat-oriented APIs | 已实现 / Done |
+| 自校准高度 (布局指纹探针 + 持久化缓存, 零公式零跳动) / Self-calibrating heights | 已实现 (v1.2.0) / Done |
 | 瀑布流布局 / Masonry layout | 计划中 / Planned |
 | 单元测试 / Unit tests | 已实现（17 项 EditMode）/ Done (17 EditMode tests) |
 
@@ -127,7 +128,7 @@ Drag a template prefab from `Examples/Templates/` under your Canvas and press Pl
 |---|---|
 | `VerticalListTemplate` | 等高垂直列表：`SimpleListItem` + `SimpleListDriver`（1000 条示例数据） |
 | `HorizontalListTemplate` | 等高水平列表：同上，横向排列 |
-| `ChatListTemplate` | 不等高聊天：`ChatItemExample` + `ChatListDriver`（长短句示例，自动滚到底） |
+| `ChatListTemplate` | 不等高聊天，**双模板**：文本消息 + 图片消息（`prefabSelector` 按数据类型分发，自动滚到底） |
 
 模板包含完整可用的层级（ScrollRect / Viewport / Content、锚点与射线承接）、已挂接的 Item Prefab 与驱动脚本。改数据看同目录的 `SimpleListDriver` / `ChatListDriver`，改样式看 `SimpleListItem`。模板被误改后可用菜单 `Tools → SVList → 重建列表模板` 一键重建。
 

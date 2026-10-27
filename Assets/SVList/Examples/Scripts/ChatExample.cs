@@ -10,6 +10,9 @@ namespace SVList.Examples
         public string Sender;
         public string Text;
         public bool IsSelf;
+
+        /// <summary>图片消息（模拟表情/图片发送）：走第二种 Item 模板（ImageMessageItem）</summary>
+        public bool IsImage;
     }
 
     /// <summary>
@@ -26,6 +29,9 @@ namespace SVList.Examples
         public const float MinHeight = 72f;
         public const float MsgFontSize = 34f;
         public const float NameFontSize = 28f;
+
+        /// <summary>图片消息显示边长（正方形；真实项目按图片宽高比计算）</summary>
+        public const float ImageSize = 240f;
     }
 
     /// <summary>
@@ -48,8 +54,14 @@ namespace SVList.Examples
         public float GetItemHeight(int index)
         {
             if (index < 0 || index >= Messages.Count || MeasureText == null) return -1f;
+
+            var msg = Messages[index];
+            if (msg.IsImage)
+                return ChatExampleMetrics.NameRowHeight + ChatExampleMetrics.ImageSize
+                     + ChatExampleMetrics.VerticalPadding;
+
             float textH = MeasureText.GetPreferredValues(
-                Messages[index].Text, ChatExampleMetrics.TextWidth, 0f).y;
+                msg.Text, ChatExampleMetrics.TextWidth, 0f).y;
             return Mathf.Max(ChatExampleMetrics.MinHeight,
                 textH + ChatExampleMetrics.NameRowHeight + ChatExampleMetrics.VerticalPadding);
         }
