@@ -38,6 +38,10 @@ namespace SVList.EditorTools
         private bool _showBounds = true;
         private bool _showHeights = true;
 
+        // 画布视图(像 Scene 视图):滚轮缩放 + 拖拽平移,1 = 适配画布
+        private float _canvasZoom = 1f;
+        private Vector2 _canvasPan = Vector2.zero;
+
         // 内嵌 Inspector(注意:本命名空间下裸 Editor 会解析到 SVList.Editor 命名空间,必须全称)
         private UnityEditor.Editor _cachedInspector;
         private UObject _cachedInspectorTarget;
@@ -131,6 +135,7 @@ namespace SVList.EditorTools
             if (prefab == _targetPrefab) return;
             _targetPrefab = prefab;
             _targetName = label;
+            ResetCanvasView();   // 换目标内容完全不同,视图回适配;同目标的 Rebuild 保持视角
             RebuildDataModel();
             Rebuild();
         }
@@ -282,6 +287,42 @@ namespace SVList.EditorTools
 
                 if (GUILayout.Button("跟随选择", EditorStyles.toolbarButton)) { _locked = false; AutoTargetFromSelection(); }
                 if (GUILayout.Button("重建", EditorStyles.toolbarButton)) Rebuild();
+                if (GUILayout.Button("复位视图", EditorStyles.toolbarButton)) ResetCanvasView();
+            }
+        }
+
+        private void ResetCanvasView()
+        {
+            _canvasZoom = 1f;
+            _canvasPan = Vector2.zero;
+            Repaint();
+        }
+
+        /// <summary>画布交互:滚轮以鼠标为锚缩放、右键/中键拖拽平移、F 复位(与 Scene 视图习惯一致)。</summary>
+        private void HandleCanvasEvents(Rect rect)
+        {
+            var e = Event.current;
+
+            if (e.type == EventType.ScrollWheel && rect.Contains(e.mousePosition))
+            {
+                var mouse = e.mousePosition - rect.center;   // 相对画布中心
+                float old = _canvasZoom;
+                _canvasZoom = Mathf.Clamp(_canvasZoom * Mathf.Pow(0.9f, e.delta.y), 0.15f, 10f);
+                // 锚点修正:保持鼠标下的内容点不动
+                _canvasPan = mouse - (mouse - _canvasPan) * (_canvasZoom / old);
+                e.Use();
+                Repaint();
+            }
+            else if (e.type == EventType.MouseDrag && (e.button == 1 || e.button == 2) && rect.Contains(e.mousePosition))
+            {
+                _canvasPan += e.delta;
+                e.Use();
+                Repaint();
+            }
+            else if (e.type == EventType.KeyDown && e.keyCode == KeyCode.F && rect.Contains(e.mousePosition))
+            {
+                ResetCanvasView();
+                e.Use();
             }
         }
 
@@ -295,57 +336,74 @@ namespace SVList.EditorTools
                 return;
             }
 
+            HandleCanvasEvents(rect);
+
             var tex = _scene.Texture;
-            float scale = Mathf.Min(rect.width / tex.width, rect.height / tex.height);
-            var pos = new Rect(rect.center - new Vector2(tex.width, tex.height) * scale * 0.5f,
-                               new Vector2(tex.width, tex.height) * scale);
-            GUI.DrawTexture(pos, tex, ScaleMode.StretchToFill, false);
+            // 画布语义:宽=虚拟面板(面板宽参数),高=当前全部条目总高;RT 整幅先适配画布,再叠加用户缩放/平移
+            float fit = Mathf.Min(rect.width / tex.width, rect.height / tex.height);
+            float scale = fit * _canvasZoom;
+            var texSize = new Vector2(tex.width, tex.height) * scale;
+            var origin = rect.center - texSize * 0.5f + _canvasPan;   // RT 左上角(画布坐标)
 
-            // 叠加:边界/越界/重叠 + 高度标注(RT 像素 → 画布坐标)
-            Vector2 Map(Vector2 px) => pos.position + px * scale;
-
-            if (_showBounds)
+            using (new GUI.GroupScope(rect))   // 裁剪:放大/平移超出画布的部分不画出界
             {
-                foreach (var item in _scene.Items)
+                var local = new Rect(origin - rect.position, texSize);
+                GUI.DrawTexture(local, tex, ScaleMode.StretchToFill, false);
+
+                // 叠加:边界/越界/重叠 + 高度标注(RT 像素 → 画布坐标)
+                Vector2 Map(Vector2 px) => local.position + px * scale;
+
+                if (_showBounds)
                 {
-                    foreach (var el in item.Elements)
+                    foreach (var item in _scene.Items)
                     {
-                        if (el.Rt == null) continue;
+                        foreach (var el in item.Elements)
+                        {
+                            if (el.Rt == null) continue;
+                            var c = new Vector3[4];
+                            el.Rt.GetWorldCorners(c);
+                            var p0 = Map(_scene.WorldToPixel(c[0]));
+                            var p2 = Map(_scene.WorldToPixel(c[2]));
+                            var r = Rect.MinMaxRect(p0.x, p0.y, p2.x, p2.y);
+
+                            Color col;
+                            if (el.IsRoot) col = new Color(0.5f, 0.75f, 0.5f, 0.9f);
+                            else if (el.OverRoot) col = new Color(0.85f, 0.35f, 0.35f, 0.95f);
+                            else if (el.Overlap) col = new Color(0.85f, 0.7f, 0.3f, 0.9f);
+                            else col = new Color(0.55f, 0.65f, 0.8f, 0.5f);
+                            DrawRectOutline(r, col, el.IsRoot ? 2f : 1f);
+                        }
+                    }
+                }
+
+                if (_showHeights)
+                {
+                    var style = new GUIStyle(EditorStyles.miniLabel) { richText = true, alignment = TextAnchor.MiddleRight };
+                    foreach (var item in _scene.Items)
+                    {
+                        if (item.Root == null) continue;
                         var c = new Vector3[4];
-                        el.Rt.GetWorldCorners(c);
+                        item.Root.GetWorldCorners(c);
                         var p0 = Map(_scene.WorldToPixel(c[0]));
                         var p2 = Map(_scene.WorldToPixel(c[2]));
                         var r = Rect.MinMaxRect(p0.x, p0.y, p2.x, p2.y);
-
-                        Color col;
-                        if (el.IsRoot) col = new Color(0.5f, 0.75f, 0.5f, 0.9f);
-                        else if (el.OverRoot) col = new Color(0.85f, 0.35f, 0.35f, 0.95f);
-                        else if (el.Overlap) col = new Color(0.85f, 0.7f, 0.3f, 0.9f);
-                        else col = new Color(0.55f, 0.65f, 0.8f, 0.5f);
-                        DrawRectOutline(r, col, el.IsRoot ? 2f : 1f);
+                        var label = item.PreferredHeight > 0f
+                            ? $"<color=#ffd27a>{item.PreferredHeight:F0}px</color>"
+                            : "<color=#ff8888>测量失败</color>";
+                        if (!string.IsNullOrEmpty(item.BindError)) label += "\n<color=#ff8888>OnBind:" + item.BindError + "</color>";
+                        var lr = new Rect(r.xMax - 70f, r.yMin, 70f, 30f);
+                        GUI.Label(lr, label, style);
                     }
                 }
             }
 
-            if (_showHeights)
-            {
-                var style = new GUIStyle(EditorStyles.miniLabel) { richText = true, alignment = TextAnchor.MiddleRight };
-                foreach (var item in _scene.Items)
-                {
-                    if (item.Root == null) continue;
-                    var c = new Vector3[4];
-                    item.Root.GetWorldCorners(c);
-                    var p0 = Map(_scene.WorldToPixel(c[0]));
-                    var p2 = Map(_scene.WorldToPixel(c[2]));
-                    var r = Rect.MinMaxRect(p0.x, p0.y, p2.x, p2.y);
-                    var label = item.PreferredHeight > 0f
-                        ? $"<color=#ffd27a>{item.PreferredHeight:F0}px</color>"
-                        : "<color=#ff8888>测量失败</color>";
-                    if (!string.IsNullOrEmpty(item.BindError)) label += "\n<color=#ff8888>OnBind:" + item.BindError + "</color>";
-                    var lr = new Rect(r.xMax - 70f, r.yMin, 70f, 30f);
-                    GUI.Label(lr, label, style);
-                }
-            }
+            // 画布边框 + 范围参照(画在裁剪组外,始终可见):明确"框"的边界与所参照的面板宽度
+            DrawRectOutline(rect, new Color(0.3f, 0.3f, 0.36f), 1f);
+            GUI.Label(new Rect(rect.x + 6f, rect.y + 3f, rect.width * 0.55f, 16f),
+                $"面板宽 {_scene.CanvasWidth:F0}px · 内容高 {_scene.ContentHeight():F0}px · 缩放 {_canvasZoom * 100f:F0}%",
+                EditorStyles.miniLabel);
+            GUI.Label(new Rect(rect.x + rect.width * 0.45f, rect.y + 3f, rect.width * 0.55f - 6f, 16f),
+                "滚轮缩放 · 右键拖动 · F 复位", new GUIStyle(EditorStyles.miniLabel) { alignment = TextAnchor.MiddleRight });
         }
 
         private static void DrawRectOutline(Rect r, Color col, float w)
