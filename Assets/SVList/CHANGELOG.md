@@ -13,6 +13,14 @@ All notable changes to SVList will be documented in this file.
   - Embedded native Inspector on the preview instance: parameter changes preview instantly, one-click copy-back writes the values to the prefab
   - Preview canvas is a hidden camera + RenderTexture (HideAndDontSave objects on a dedicated layer) — zero pollution to scenes and assets
   - Fully additive Editor-only feature (Editor/Preview/), no runtime changes
+  - Canvas zoom & pan like the Scene view: scroll wheel zooms anchored at the mouse, right/middle-drag pans, `F` or the toolbar button resets to fit; the canvas has a visible frame and a corner caption showing panel width, content height and zoom — content stays clipped inside the canvas
+
+### Fixed
+- Blank preview canvas with short content: the camera viewed the wrong half of the canvas (items hang from the top anchor but the camera aimed below the origin); the canvas top edge is now aligned to `y=0` so every content height is covered
+- Prefab-Stage follow stopped working while editing in the Scene view: the poll ran at the end of `OnGUI`, which a docked window only executes on GUI events — it now runs from `EditorApplication.update`; closing the stage retargets to the saved prefab asset instead of a destroyed stage root
+- `Releasing render texture that is set as Camera.targetTexture!` when entering prefab mode or closing the window (the RT is unbound before release in both `Render()` and `Dispose()`)
+- Embedded inspector threw on rebuild when Odin (or another plugin) takes over custom inspectors (cached editor released first, exceptions logged with a clean `ExitGUI` instead of unbalancing the GUI clip stack)
+- Package resolve logged `no meta file in immutable folder` for `Editor/Preview` (the folder's `.meta` was inside the folder instead of beside it)
 
 ## [1.2.1] - 2026-10-28
 
