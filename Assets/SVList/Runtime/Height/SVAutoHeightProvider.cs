@@ -53,14 +53,11 @@ namespace SVList
         void ISVTemplateCapture.OnItemInstantiated(ISVItemRenderer renderer, int prefabId)
         {
 #if UNITY_TEXTMESHPRO_PRESENT
-            if (_probe.Capture(renderer, prefabId))
-                OnProbeBecameReady();
-            else
-            {
-                // 布局未就绪（rect.width=0）：入重试队列，Tick 中下帧再采
-                _retryRenderers.Add(renderer);
-                _retryPrefabIds.Add(prefabId);
-            }
+            // 一律延迟到 Tick（下一帧）采集：创建帧的 rect.width 是池对象/prefab 的
+            // 陈旧序列化值（>0 但非真实布局宽度），内联采集会把陈旧宽度写进指纹，
+            // 连锁污染测量与持久化缓存。下一帧 Tick 时 Canvas 布局必然已完成。
+            _retryRenderers.Add(renderer);
+            _retryPrefabIds.Add(prefabId);
 #endif
         }
 

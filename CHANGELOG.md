@@ -2,6 +2,11 @@
 
 All notable changes to SVList will be documented in this file.
 
+## [1.2.4] - 2026-10-28
+
+### Fixed
+- **Stale capture width poisoning the fingerprint (follow-up to 1.2.3)**: on the creation frame an item's `rect.width` is the pooled/prefab object's stale serialized value — which is *positive* (e.g. the design width), so the "width > 0" guard let the inline capture succeed with a stale width. That poisoned the fingerprint, the measurements and the persistent cache with single-line heights. Capture is now always deferred to `Tick` (next frame), when the canvas layout has certainly run and the width is fresh
+
 ## [1.2.3] - 2026-10-28
 
 ### Fixed
