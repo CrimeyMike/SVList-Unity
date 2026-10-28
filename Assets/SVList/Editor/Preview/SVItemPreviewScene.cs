@@ -5,10 +5,10 @@ using UnityEngine.UI;
 namespace SVList.EditorTools
 {
     /// <summary>
-    /// 设计时预览的渲染后端(v1.3.0 一期):
-    /// 自建 隐藏相机 + RenderTexture + WorldSpace Canvas,实例化 Item prefab 并注入测试数据,
-    /// 收集每个条目的实测高度与元素几何(供窗口叠加绘制边界/越界/重叠标注)。
-    /// 所有对象 hideFlags=HideAndDontSave,不进用户场景/不产生资产文件(零污染)。
+    /// 设计时预览的渲染后端(v1.3.0):
+    /// 基于 UnityEditor.PreviewRenderUtility(官方编辑器预览管线,内部托管 preview scene、
+    /// 相机与 RenderTexture 生命周期——编辑器模式下手动 camera.Render() 不可靠,勿自建)。
+    /// 实例化 Item prefab 并注入测试数据,收集实测高度与元素几何供窗口叠加标注。
     /// </summary>
     internal sealed class SVItemPreviewScene : System.IDisposable
     {
@@ -16,53 +16,50 @@ namespace SVList.EditorTools
         {
             public RectTransform Rt;
             public bool IsRoot;
-            public bool OverRoot;   // 超出条目根矩形
-            public bool Overlap;    // 与兄弟元素重叠
+            public bool OverRoot;
+            public bool Overlap;
         }
 
         public struct ItemInfo
         {
             public RectTransform Root;
-            public float PreferredHeight;   // ISVItemRenderer.GetPreferredHeight()(与运行时兜底同源)
+            public float PreferredHeight;
             public List<ElementRect> Elements;
             public string BindError;
         }
 
-        private Camera _camera;
-        private Canvas _canvas;
-        private readonly RectTransform _stack;
-        private RenderTexture _rt;
+        private readonly UnityEditor.PreviewRenderUtility _pru;
+        private readonly Canvas _canvas;
         private readonly List<ItemInfo> _items = new List<ItemInfo>();
+        private RenderTexture _last;
+        private Rect _lastRect;
 
-        private const int RtWidth = 560;
-
-        public RenderTexture Texture => _rt;
+        public RenderTexture Texture => _last;
         public IReadOnlyList<ItemInfo> Items => _items;
-        public float CanvasWidth { get; private set; } = 560f;
+        public float CanvasWidth { get; private set; } = 720f;
 
         public SVItemPreviewScene()
         {
-            var camGo = new GameObject("SVList_PreviewCam") { hideFlags = HideFlags.HideAndDontSave };
-            _camera = camGo.AddComponent<Camera>();
-            _camera.orthographic = true;
-            _camera.clearFlags = CameraClearFlags.SolidColor;
-            _camera.backgroundColor = new Color(0.075f, 0.075f, 0.09f, 1f);
-            _camera.cullingMask = 1 << 22; // 独立层(LayerMask 自选的预览层,不与用户场景冲突)
-            camGo.layer = 22;
+            _pru = new UnityEditor.PreviewRenderUtility();
+            var cam = _pru.camera;
+            cam.orthographic = true;
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.075f, 0.075f, 0.09f, 1f);
+            cam.cullingMask = 1 << 22;
+            cam.nearClipPlane = 0.1f;
+            cam.farClipPlane = 1000f;
 
-            var canvasGo = new GameObject("SVList_PreviewCanvas") { hideFlags = HideFlags.HideAndDontSave };
+            var canvasGo = new GameObject("SVList_PreviewCanvas");
             canvasGo.layer = 22;
             _canvas = canvasGo.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.WorldSpace;
             _canvas.additionalShaderChannels = AdditionalCanvasShaderChannels.TexCoord1;
-
             var rt = canvasGo.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(RtWidth, 800f);
-            rt.position = Vector3.zero;
-            _stack = rt;
+            rt.sizeDelta = new Vector2(1080f, 800f);
+            _pru.AddSingleGO(canvasGo); // 进入 PRU 托管的 preview scene
         }
 
-        /// <summary>用给定 prefab 与测试数据重建预览内容。</summary>
+        /// <summary>用给定 prefab 与测试数据重建预览内容(不渲染,渲染在 Render(rect))。</summary>
         public void Build(GameObject prefabAsset, float panelWidth, IList<object> testDatas)
         {
             ClearItems();
@@ -71,15 +68,14 @@ namespace SVList.EditorTools
             float y = 0f;
             for (int i = 0; i < testDatas.Count; i++)
             {
-                var inst = Object.Instantiate(prefabAsset, _stack);
-                inst.hideFlags = HideFlags.HideAndDontSave;
-                inst.layer = 22;
-                SetLayerRecursive(inst.transform, 22);
+                var inst = Object.Instantiate(prefabAsset);
+                SetLayerRecursive(inst.transform);
+                _pru.AddSingleGO(inst);
 
                 var root = inst.transform as RectTransform;
                 if (root == null) { Object.DestroyImmediate(inst); continue; }
 
-                // 模拟列表系统对根的控制:宽度=面板宽、顶部锚定、从上往下排
+                root.SetParent(_canvas.transform, false);
                 root.anchorMin = new Vector2(0.5f, 1f);
                 root.anchorMax = new Vector2(0.5f, 1f);
                 root.pivot = new Vector2(0.5f, 1f);
@@ -89,7 +85,6 @@ namespace SVList.EditorTools
                 ForceLayout(root);
 
                 var info = new ItemInfo { Root = root, Elements = new List<ElementRect>() };
-
                 var rendererComp = FindRenderer(inst);
                 if (rendererComp != null)
                 {
@@ -105,46 +100,37 @@ namespace SVList.EditorTools
                             info.PreferredHeight = h;
                         }
                     }
-                    catch (System.Exception e)
-                    {
-                        info.BindError = e.Message;
-                    }
+                    catch (System.Exception e) { info.BindError = e.Message; }
                 }
-                else
-                {
-                    info.BindError = "未找到 ISVItemRenderer(挂 SVItemBase<T> 子类?)";
-                }
+                else info.BindError = "未找到 ISVItemRenderer(挂 SVItemBase<T> 子类?)";
 
                 CollectGeometry(ref info);
                 _items.Add(info);
                 y += root.rect.height + 16f;
             }
-
-            Render();
         }
 
-        public void Render()
+        /// <summary>渲染到给定视口尺寸,返回 RT(PRU 托管,调用方不要释放)。</summary>
+        public RenderTexture Render(Rect viewportRect)
         {
-            // 先解绑再释放,否则触发 "Releasing render texture that is set as Camera.targetTexture!"
-            _camera.targetTexture = null;
-            if (_rt != null) { _rt.Release(); Object.DestroyImmediate(_rt); }
+            float worldH = Mathf.Max(200f, ContentHeight());
+            var cam = _pru.camera;
+            cam.aspect = viewportRect.width / Mathf.Max(1f, viewportRect.height);
+            cam.orthographicSize = worldH * 0.5f;
+            cam.transform.position = new Vector3(0f, -worldH * 0.5f, -100f);
 
-            float worldH = Mathf.Max(400f, ContentHeight());
-            _rt = new RenderTexture(RtWidth, Mathf.Max(400, Mathf.RoundToInt(worldH * RtWidth / CanvasWidth)), 0, RenderTextureFormat.ARGB32)
-            { hideFlags = HideFlags.HideAndDontSave };
-
-            _camera.targetTexture = _rt;
-            _camera.aspect = (float)RtWidth / _rt.height;
-            _camera.orthographicSize = worldH * 0.5f;
-            _camera.transform.position = new Vector3(0f, -worldH * 0.5f, -100f);
-            _camera.Render();
+            _pru.BeginPreview(viewportRect, GUIStyle.none);
+            _pru.camera.Render();
+            _last = _pru.EndPreview();
+            _lastRect = viewportRect;
+            return _last;
         }
 
-        /// <summary>世界坐标 → RT 像素坐标(叠加绘制标注用)。</summary>
+        /// <summary>世界坐标 → 视口像素坐标(叠加绘制标注用)。</summary>
         public Vector2 WorldToPixel(Vector3 world)
         {
-            var vp = _camera.WorldToViewportPoint(world);
-            return new Vector2(vp.x * RtWidth, (1f - vp.y) * _rt.height);
+            var vp = _pru.camera.WorldToViewportPoint(world);
+            return new Vector2(vp.x * _lastRect.width, (1f - vp.y) * _lastRect.height);
         }
 
         public float ContentHeight()
@@ -162,39 +148,34 @@ namespace SVList.EditorTools
         public void Dispose()
         {
             ClearItems();
-            if (_rt != null) { _rt.Release(); Object.DestroyImmediate(_rt); _rt = null; }
-            if (_canvas != null) Object.DestroyImmediate(_canvas.gameObject);
-            if (_camera != null) Object.DestroyImmediate(_camera.gameObject);
+            _pru.Cleanup();
         }
 
         // ---- 内部 ----
 
         private void ClearItems()
         {
-            if (_stack == null) return;
-            for (int i = _stack.childCount - 1; i >= 0; i--)
+            if (_canvas == null) return;
+            for (int i = _canvas.transform.childCount - 1; i >= 0; i--)
             {
-                var c = _stack.GetChild(i);
+                var c = _canvas.transform.GetChild(i);
                 Object.DestroyImmediate(c.gameObject);
             }
             _items.Clear();
         }
 
-        private static void SetLayerRecursive(Transform t, int layer)
+        private static void SetLayerRecursive(Transform t)
         {
-            foreach (Transform c in t) SetLayerRecursive(c, layer);
+            t.gameObject.layer = 22;
+            foreach (Transform c in t) SetLayerRecursive(c);
         }
 
         private static ISVItemRenderer FindRenderer(GameObject go)
         {
             foreach (var mb in go.GetComponentsInChildren<MonoBehaviour>(true))
-            {
-                if (mb is ISVItemRenderer r && mb.gameObject == go) return r; // 优先根上的
-            }
+                if (mb is ISVItemRenderer r && mb.gameObject == go) return r;
             foreach (var mb in go.GetComponentsInChildren<MonoBehaviour>(true))
-            {
                 if (mb is ISVItemRenderer r) return r;
-            }
             return null;
         }
 
