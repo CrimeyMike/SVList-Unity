@@ -7,8 +7,7 @@
         "UnityEngine.UI",
         "UnityEditor.CoreModule",
         "Unity.TextMeshPro",
-        "SVList.Examples",
-        "Unity.RenderPipelines.Universal.Runtime"
+        "SVList.Examples"
     ],
     "includePlatforms": [
         "Editor"
@@ -19,17 +18,6 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [
-        {
-            "name": "com.unity.textmeshpro",
-            "expression": "1.0.0",
-            "define": "UNITY_TEXTMESHPRO_PRESENT"
-        },
-        {
-            "name": "com.unity.render-pipelines.universal",
-            "expression": "1.0.0",
-            "define": "UNITY_URP_PRESENT"
-        }
-    ],
+    "versionDefines": [],
     "noEngineReferences": false
 }

@@ -207,8 +207,6 @@ namespace SVList.EditorTools
             _cachedInspectorTarget = null;
 
             _scene.Build(_targetPrefab, _panelWidth, _datas);
-            _scene.Render(new Rect(0f, 0f, 560f,
-                560f * _scene.ContentHeight() / Mathf.Max(1f, _scene.CanvasWidth)));
             CacheInspector();
             Repaint();
         }
