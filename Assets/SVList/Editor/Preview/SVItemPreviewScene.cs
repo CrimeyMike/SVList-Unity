@@ -121,7 +121,7 @@ namespace SVList.EditorTools
 
             _pru.BeginPreview(viewportRect, GUIStyle.none);
             _pru.camera.Render();
-            _last = _pru.EndPreview();
+            _last = (RenderTexture)_pru.EndPreview();
             _lastRect = viewportRect;
             return _last;
         }
