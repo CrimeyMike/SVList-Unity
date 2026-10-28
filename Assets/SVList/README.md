@@ -23,6 +23,19 @@
 
 场景被误改后可用菜单 `Tools → SVList → 重建聊天演示场景` 一键重建。
 
+## 设计时预览（v1.3.0）
+
+不进 Play，直接看 Item 绑定数据后的真实效果：菜单 `Window → SVList → Item Preview`。
+
+- **跟随选择**：选中挂 `SVItemBase<T>` 的 prefab、或双击进入 Prefab Mode 编辑时自动跟随；Stage 里未保存的拖动经节流轮询半实时刷新，prefab 保存/脚本编译后自动重建
+- **测试数据**：按数据模型 `T` 的字段反射生成编辑器（string/bool/数值/枚举/Sprite/Color），改动即时重绑；数据存 EditorPrefs（按模型类型），不进 prefab
+- **高度标注**：取 `GetPreferredHeight()`（与运行时兜底同源），预览即真实高度
+- **边界诊断**：条目根轮廓（绿）、元素轮廓；元素超出根矩形标红、兄弟重叠标黄
+- **内嵌 Inspector**：预览实例上的组件参数改动即时生效；[将组件值写回 prefab] 一键拷回
+- 预览渲染在隐藏相机 + RenderTexture 中（HideAndDontSave），不污染场景与资产
+
+> 注意：预览直接调用 `OnBind`，请保持 OnBind 为纯 UI 操作（不播声音/不联网/不改全局状态）；异常会被捕获并显示在条目标注上。
+
 ## 列表模板（最快路径）
 
 `Examples/Templates/` 下有三个**开箱即用**的完整列表模板 prefab（层级 + 配置 + Item Prefab + 驱动脚本全部接好线），拖进 Canvas 下直接 Play：
