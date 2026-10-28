@@ -200,6 +200,12 @@ namespace SVList.EditorTools
         private void Rebuild()
         {
             if (_scene == null || _targetPrefab == null) { Repaint(); return; }
+
+            // 重建会销毁全部预览实例;先释放引用它们的所有缓存 Editor,
+            // 否则 Odin 等接管自定义 Inspector 的插件会在 OnGUI 时对已销毁目标抛异常
+            _cachedInspector = null;
+            _cachedInspectorTarget = null;
+
             _scene.Build(_targetPrefab, _panelWidth, _datas);
             _scene.Render(new Rect(0f, 0f, 560f,
                 560f * _scene.ContentHeight() / Mathf.Max(1f, _scene.CanvasWidth)));
@@ -391,7 +397,8 @@ namespace SVList.EditorTools
                 if (_cachedInspector != null)
                 {
                     EditorGUI.BeginChangeCheck();
-                    _cachedInspector.OnInspectorGUI();
+                    try { _cachedInspector.OnInspectorGUI(); }
+                    catch (System.Exception) { _cachedInspector = null; _cachedInspectorTarget = null; }
                     if (EditorGUI.EndChangeCheck()) Rebuild();
 
                     if (GUILayout.Button("将组件值写回 prefab"))
