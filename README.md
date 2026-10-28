@@ -49,6 +49,7 @@ SVList is a production-grade virtual scroll list for Unity UGUI. It handles **1,
 | 高度预计算 (ISVItemHeightProvider，消除估算跳动) / Height pre-computation | 已实现 / Done |
 | 聊天 API (IsAtBottom / ScrollToBottom / AppendItems) / Chat-oriented APIs | 已实现 / Done |
 | 自校准高度 (布局指纹探针 + 持久化缓存, 零公式零跳动) / Self-calibrating heights | 已实现 (v1.2.0) / Done |
+| 设计时实时预览 (不进 Play 即见数据绑定效果/边界越界诊断) / Design-time item preview | 已实现 (v1.3.0) / Done |
 | 瀑布流布局 / Masonry layout | 计划中 / Planned |
 | 单元测试 / Unit tests | 已实现（17 项 EditMode）/ Done (17 EditMode tests) |
 
