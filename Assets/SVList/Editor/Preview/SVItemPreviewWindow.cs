@@ -52,8 +52,12 @@ namespace SVList.EditorTools
         private void OnEnable()
         {
             PrefabStage.prefabSaved += OnPrefabSaved;
+            PrefabStage.prefabStageClosing += OnStageClosing;
             AssemblyReloadEvents.afterAssemblyReload += OnHotReload;
             Selection.selectionChanged += Repaint;
+            // 轮询挂编辑器主循环而非 OnGUI:docked 窗口只有收到鼠标/GUI 事件才跑 OnGUI,
+            // 用户在 Scene 里编辑时预览窗口收不到事件,挂在 OnGUI 末尾的轮询会饿死(预览冻结在旧帧)。
+            EditorApplication.update += PollStage;
             _scene = new SVItemPreviewScene();
             AutoTargetFromSelection();
         }
@@ -61,8 +65,10 @@ namespace SVList.EditorTools
         private void OnDisable()
         {
             PrefabStage.prefabSaved -= OnPrefabSaved;
+            PrefabStage.prefabStageClosing -= OnStageClosing;
             AssemblyReloadEvents.afterAssemblyReload -= OnHotReload;
             Selection.selectionChanged -= Repaint;
+            EditorApplication.update -= PollStage;
             _scene?.Dispose();
             _scene = null;
         }
@@ -76,7 +82,6 @@ namespace SVList.EditorTools
                     GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)));
                 DrawSidePanel(320f);
             }
-            PollStage();
         }
 
         // ---------------- 目标与刷新 ----------------
@@ -214,7 +219,18 @@ namespace SVList.EditorTools
         private void OnPrefabSaved(GameObject _) { if (!_locked) { AutoTargetFromSelection(); } Rebuild(); }
         private void OnHotReload() { RebuildDataModel(); Rebuild(); }
 
-        /// <summary>Stage 未保存拖动的半实时跟随:节流轮询内容根的结构哈希。</summary>
+        private void OnStageClosing(PrefabStage stage)
+        {
+            // Stage 关闭会销毁内容根;若当前目标正是它,退回该 prefab 资产继续预览(否则目标变已销毁引用,预览冻结)
+            if (_targetPrefab == stage.prefabContentsRoot)
+            {
+                var asset = AssetDatabase.LoadAssetAtPath<GameObject>(stage.assetPath);
+                if (asset != null) SetTarget(asset, asset.name);
+            }
+        }
+
+        /// <summary>Stage 未保存拖动的半实时跟随:节流轮询内容根的结构哈希。
+        /// 由 EditorApplication.update 驱动(OnEnable 订阅),不依赖窗口收到 GUI 事件。</summary>
         private void PollStage()
         {
             var now = EditorApplication.timeSinceStartup;
