@@ -125,6 +125,8 @@ namespace SVList.EditorTools
 
         public void Render()
         {
+            // 先解绑再释放,否则触发 "Releasing render texture that is set as Camera.targetTexture!"
+            _camera.targetTexture = null;
             if (_rt != null) { _rt.Release(); Object.DestroyImmediate(_rt); }
 
             float worldH = Mathf.Max(400f, ContentHeight());
