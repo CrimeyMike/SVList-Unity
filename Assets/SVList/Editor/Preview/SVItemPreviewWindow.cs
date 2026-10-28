@@ -72,7 +72,8 @@ namespace SVList.EditorTools
             DrawToolbar();
             using (new EditorGUILayout.HorizontalScope())
             {
-                DrawCanvas(GUILayoutUtility.GetRect(0, 0, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)));
+                DrawCanvas(GUILayoutUtility.GetRect(GUIContent.none, EditorStyles.label,
+                    GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)));
                 DrawSidePanel(GUILayout.Width(320));
             }
             PollStage();
@@ -92,16 +93,16 @@ namespace SVList.EditorTools
                 return;
             }
 
-            // 2) 选中的 GameObject(取其 prefab 根)
+            // 2) 选中的 GameObject(取其 prefab 实例根)
             var go = Selection.activeGameObject;
             if (go != null)
             {
-                var root = PrefabUtility.FindRootInstanceWithNearestParentTransform(go.transform);
+                var root = PrefabUtility.GetNearestPrefabInstanceRoot(go);
                 GameObject asset = null;
                 if (root != null)
                 {
-                    var src = PrefabUtility.GetCorrespondingObjectFromSource(root.gameObject);
-                    if (src != null && HasRenderer(src.gameObject)) asset = src.gameObject;
+                    var src = PrefabUtility.GetCorrespondingObjectFromSource(root) as GameObject;
+                    if (src != null && HasRenderer(src)) asset = src;
                 }
                 if (asset == null && HasRenderer(go)) asset = go;
                 if (asset != null) { SetTarget(asset, asset.name); return; }
