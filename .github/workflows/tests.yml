@@ -6,9 +6,33 @@ on:
   pull_request:
     branches: [main]
 
+# Unity licensing secrets are required for GameCI to run at all. Until they
+# are configured (one-time setup, see the notice below) every run would fail
+# after ~90s and spam the inbox - so the test job is gated and skipped instead.
 jobs:
+  license-check:
+    name: Check Unity license secret
+    runs-on: ubuntu-latest
+    outputs:
+      has-license: ${{ steps.check.outputs.has-license }}
+    steps:
+      - id: check
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; }; then
+            echo "has-license=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-license=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Unity license secrets (UNITY_LICENSE, or UNITY_EMAIL+UNITY_PASSWORD) are not configured - skipping EditMode tests. One-time setup: https://game.ci/docs/github/activation"
+          fi
+
   editmode-tests:
     name: EditMode tests (${{ matrix.unityVersion }})
+    needs: license-check
+    if: needs.license-check.outputs.has-license == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
