@@ -74,7 +74,7 @@ namespace SVList.EditorTools
             {
                 DrawCanvas(GUILayoutUtility.GetRect(GUIContent.none, EditorStyles.label,
                     GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)));
-                DrawSidePanel(GUILayout.Width(320));
+                DrawSidePanel(320f);
             }
             PollStage();
         }
