@@ -110,7 +110,9 @@ namespace SVList.EditorTools
             }
         }
 
-        /// <summary>渲染到给定视口尺寸,返回 RT(PRU 托管,调用方不要释放)。</summary>
+        /// <summary>渲染到给定视口尺寸,返回 RT(PRU 托管,调用方不要释放)。
+        /// URP 下手动 camera.Render() 走内置管线路径会静默黑屏,须走
+        /// UniversalRenderPipeline.RenderSingleCamera(条件编译,内置管线项目不受影响)。</summary>
         public RenderTexture Render(Rect viewportRect)
         {
             float worldH = Mathf.Max(200f, ContentHeight());
@@ -120,7 +122,12 @@ namespace SVList.EditorTools
             cam.transform.position = new Vector3(0f, -worldH * 0.5f, -100f);
 
             _pru.BeginPreview(viewportRect, GUIStyle.none);
+#if UNITY_URP_PRESENT
+            var ctx = new UnityEngine.Rendering.ScriptableRenderContext();
+            UnityEngine.Rendering.Universal.UniversalRenderPipeline.RenderSingleCamera(ctx, cam);
+#else
             _pru.camera.Render();
+#endif
             _last = (RenderTexture)_pru.EndPreview();
             _lastRect = viewportRect;
             return _last;
