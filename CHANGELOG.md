@@ -2,58 +2,24 @@
 
 All notable changes to SVList will be documented in this file.
 
-## [1.2.6] - 2026-10-28
-
-### Fixed
-- **The text-member heuristic measured the wrong field** (the ultimate root cause of text overflowing bubbles): preferred-name matching was case-sensitive, so a data class declaring `Text` (capital T) missed it; the fallback took "the first string member", whose order is not guaranteed at runtime — frequently landing on the sender-name field. Heights were then computed from the short name (single line) while the long body rendered two lines. Preferred matching is now case-insensitive, and among the remaining candidates the *longest current value* wins (a chat body is necessarily longer than a sender name)
-
-## [1.2.5] - 2026-10-28
-
-### Fixed
-- **Stale entries in the persistent height cache resurrecting on matching fingerprints**: users upgrading through 1.2.1–1.2.4 carry cache files with single-line heights written under the stale-width regime; when a panel's real wrap width happens to equal the stale fingerprint width, those keys hit again (and the reconciliation layer sees provider == current, so it doesn't correct). The content key now carries a cache-schema salt ("v2"), invalidating every historical entry at once — old entries age out of the LRU naturally
-
-## [1.2.4] - 2026-10-28
-
-### Fixed
-- **Stale capture width poisoning the fingerprint (follow-up to 1.2.3)**: on the creation frame an item's `rect.width` is the pooled/prefab object's stale serialized value — which is *positive* (e.g. the design width), so the "width > 0" guard let the inline capture succeed with a stale width. That poisoned the fingerprint, the measurements and the persistent cache with single-line heights. Capture is now always deferred to `Tick` (next frame), when the canvas layout has certainly run and the width is fresh
-
-## [1.2.3] - 2026-10-28
-
-### Fixed
-- **Stale-width measurement poisoning (follow-up to 1.2.2)**: on the creation frame an item's `rect.width` is not 0 but the *stale* serialized value of the pooled/prefab object (e.g. the prefab's design width), so refusing to measure at width<=0 was not enough — single-line heights still got written and marked as measured. Two reconciliation layers now guard against this:
-  - `UpdateItemHeight` reconciles each measurement with the provider (provider wins beyond an 8px threshold) at write time
-  - `ApplyProviderHeights` now also *corrects* already-measured entries that disagree with the provider, instead of skipping them
-
-## [1.2.2] - 2026-10-28
-
-### Fixed
-- **Text overflowing the bubble on narrow panels** (e.g. two lines of text rendered into a one-line bubble): the fallback measurement used a hard-coded wrap width (760) when the item's `rect.width` was not yet available (the creation frame, before the canvas layout pass). On panels narrower than the design width this measured a single line and permanently poisoned the height cache entry (measured entries are authoritative), so the correct back-filled height never applied. The fallback now refuses to measure (`return 0`) when the width is unavailable — the entry stays on the estimate until the self-calibration back-fill (or a later re-measure) supplies the exact height
-
-## [1.2.1] - 2026-10-28
-
-### Fixed
-- **Scrolling jitter when scrolling up through not-yet-measured items** (strong with image messages, whose exact height differs ~200px from the estimate): the layout's height cache is now back-filled with exact provider heights as soon as each template's fingerprint is ready. `Initialize` always runs before the first item exists, so the initial pass used to fall back to estimates for everything and every item corrected itself during scrolling
-- Probe capture retries on the next frame: an item's `rect.width` is 0 in the frame it was created (canvas layout has not run yet), which used to make capture fail indefinitely
-- Multi-template timing: the back-fill triggers once per newly-ready template (text vs image templates become ready on different frames) instead of only once
-- Image-message templates are now correctly detected as fixed-height items: the dynamic-text heuristic requires a vertically-stretched TMP, so a header name row no longer gets mistaken for the body text
-
-## [1.2.0] - 2026-10-27
+## [1.2.0] - 2026-10-28
 
 ### Added
 - **Self-calibrating heights** — automatic, exact height pre-computation with zero user formulas:
-  - `SVHeightProbe`: captures a layout fingerprint (font, size, wrap width, rich-text/word-wrap flags, fixed delta) from the first instantiated item of each template. Inspector layout edits are picked up automatically — no constants to keep in sync, and no code-side layout (OnBind never touches sizes anymore)
-  - `SVPersistentHeightCache`: content-addressed height cache keyed by FNV-1a(layout fingerprint + text), with in-memory LRU (100k entries) and throttled binary persistence under `persistentDataPath/svlist/`. Restarts hit the cache (history reload needs no measuring); layout changes change the fingerprint, so stale entries invalidate themselves
-  - `SVAutoHeightProvider`: wires probe + cache into the existing provider channel. Enabled by `SVConfig.AutoMeasure` (default on) whenever the data source implements no `ISVItemHeightProvider` and no manual provider was set — falls back to estimation + post-instantiation correction until the first item of a template has been seen
-  - `SVListView.PremeasureHeights(from, to)`: warm up a page of heights after loading history (milliseconds); used by the chat template driver
-  - Text-member heuristic for arbitrary data types: string field/property named `text`/`content`/`msg`/`message`/`body`, else the first string member; exotic layouts can still fall back to a hand-written provider
-  - Templates without TMP text (e.g. image messages) are captured as fixed-height items automatically
-  - TMP integration is conditionally compiled (`UNITY_TEXTMESHPRO_PRESENT` via asmdef versionDefines); projects without TextMeshPro keep a TMP-free Runtime, AutoMeasure degrades to a no-op
-- Chat example reworked Inspector-first: prefab static layouts are now authoritative (name row top, bubble left-anchored, correct preview), `OnBind` only flips the bubble side for self-messages and fills text; `MeasureHeight` reads the live `rect.width` so Inspector width edits propagate automatically
-- Image message template (`ImageMessageItem`): second chat template (PrefabID 1) selected via `prefabSelector` by data type — demonstrates multi-template dispatch (text vs. image) with the generator wiring both prefabs
+  - `SVHeightProbe`: captures a layout fingerprint (font, size, wrap width, rich-text/word-wrap flags, fixed delta) from the first instantiated item of each template; Inspector layout edits are picked up automatically, `OnBind` never touches RectTransform sizes — prefab static layouts are authoritative
+  - `SVPersistentHeightCache`: content-addressed height cache (FNV-1a of fingerprint + text, schema-salted) with in-memory LRU (100k) and throttled binary persistence — restarts hit the cache; layout changes invalidate keys naturally
+  - `SVAutoHeightProvider`: auto-enabled by `SVConfig.AutoMeasure` (default on) when the data source implements no `ISVItemHeightProvider`; `view.PremeasureHeights(from, to)` warms up a page after loading history
+  - Text-member heuristic (case-insensitive preferred names, longest current value wins); fixed-height templates (image messages) captured as constants; TMP integration conditionally compiled (`UNITY_TEXTMESHPRO_PRESENT`), keeping the Runtime TMP-free where TMP is absent
+- Chat example reworked Inspector-first: prefab static layouts are correct in preview, `OnBind` only flips the bubble side for self-messages; `MeasureHeight` reads the live `rect.width`
+- Image message template (`ImageMessageItem`): second chat template dispatched via `prefabSelector` by data type
 
 ### Fixed
-- `ChatListTemplate` item prefab reference (wrong root fileID left the Item Prefabs list empty)
-- Hierarchy-menu completion log pointed at a stale project path
+- Scrolling jitter when scrolling through not-yet-measured items: exact provider heights are back-filled into the layout cache as soon as each template's fingerprint is ready (with per-template timing and bottom-anchoring)
+- Text overflowing its bubble: measurements refuse to run with an unavailable wrap width, fingerprint capture defers to the frame after the canvas layout pass (creation-frame widths are stale), and every measurement reconciles with the provider (provider wins beyond a threshold)
+- Text-member heuristic measured the sender name instead of the body (case-sensitive matching missed `Text`; member order is not guaranteed at runtime)
+- `ChatListTemplate` broken item prefab reference; hierarchy-menu stale path
+
+
 
 ## [1.1.0] - 2026-10-26
 
