@@ -39,12 +39,14 @@ namespace SVList.Examples
         /// <summary>
         /// 兜底测量（AutoMeasure / Provider 未生效时使用；宽度读实例真实值，Inspector 改宽度自动跟随）。
         /// v1.2.0 自校准高度开启时，Provider 已给出精确高度，本方法不会在滚动热路径被调用。
+        /// 注意：条目创建帧 Canvas 布局尚未发生（rect.width=0），此时返回 0 放弃测量 ——
+        /// 列表会保持估算并等待自校准回灌/复用帧实测，避免用错误的兜底宽度先入为主。
         /// </summary>
         protected override float MeasureHeight()
         {
             if (MsgText == null || Data == null) return 0f;
             float width = MsgText.rectTransform.rect.width;
-            if (width <= 0f) width = ChatExampleMetrics.TextWidth;
+            if (width <= 0f) return 0f; // 布局未就绪：宁可不测，不可测错
             float textH = MsgText.GetPreferredValues(Data.Text, width, 0f).y;
             return Mathf.Max(ChatExampleMetrics.MinHeight,
                 textH + ChatExampleMetrics.NameRowHeight + ChatExampleMetrics.VerticalPadding);

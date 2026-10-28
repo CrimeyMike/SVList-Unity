@@ -2,6 +2,11 @@
 
 All notable changes to SVList will be documented in this file.
 
+## [1.2.2] - 2026-10-28
+
+### Fixed
+- **Text overflowing the bubble on narrow panels** (e.g. two lines of text rendered into a one-line bubble): the fallback measurement used a hard-coded wrap width (760) when the item's `rect.width` was not yet available (the creation frame, before the canvas layout pass). On panels narrower than the design width this measured a single line and permanently poisoned the height cache entry (measured entries are authoritative), so the correct back-filled height never applied. The fallback now refuses to measure (`return 0`) when the width is unavailable — the entry stays on the estimate until the self-calibration back-fill (or a later re-measure) supplies the exact height
+
 ## [1.2.1] - 2026-10-28
 
 ### Fixed
