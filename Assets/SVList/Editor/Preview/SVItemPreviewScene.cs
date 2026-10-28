@@ -120,7 +120,6 @@ namespace SVList.EditorTools
                 y += root.rect.height + 16f;
             }
 
-            LayoutCamera(y);
             Render();
         }
 
