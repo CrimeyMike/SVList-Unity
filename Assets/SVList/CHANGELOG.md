@@ -2,6 +2,13 @@
 
 All notable changes to SVList will be documented in this file.
 
+## [1.2.3] - 2026-10-28
+
+### Fixed
+- **Stale-width measurement poisoning (follow-up to 1.2.2)**: on the creation frame an item's `rect.width` is not 0 but the *stale* serialized value of the pooled/prefab object (e.g. the prefab's design width), so refusing to measure at width<=0 was not enough — single-line heights still got written and marked as measured. Two reconciliation layers now guard against this:
+  - `UpdateItemHeight` reconciles each measurement with the provider (provider wins beyond an 8px threshold) at write time
+  - `ApplyProviderHeights` now also *corrects* already-measured entries that disagree with the provider, instead of skipping them
+
 ## [1.2.2] - 2026-10-28
 
 ### Fixed

@@ -546,6 +546,16 @@ namespace SVList
             float preferredHeight = renderer.GetPreferredHeight();
             if (preferredHeight <= 0f) return;
 
+            // v1.2.3：Provider 对账——条目创建帧 Canvas 布局未发生，rect.width 可能是
+            // 池对象/prefab 的陈旧值，实测会量出错误高度。Provider 基于真实布局指纹，
+            // 差异超阈值时以 Provider 为准（防"先入为主"的脏测量写入缓存）。
+            if (_cachedHeightGetter != null)
+            {
+                float provided = _cachedHeightGetter(index);
+                if (provided > 0f && Mathf.Abs(provided - preferredHeight) > 8f)
+                    preferredHeight = provided;
+            }
+
             // 更新高度缓存
             float delta = _heightCache.UpdateHeight(index, preferredHeight);
             if (Mathf.Abs(delta) > _config.HeightChangeThreshold)
@@ -581,11 +591,15 @@ namespace SVList
         /// Initialize 时 Provider 往往未就绪（探针依赖首个条目实例化），导致精确值错过
         /// HeightCache 的全量初始化——本方法在就绪后补灌，消除"估算→实测修正"的
         /// 滚动跳变（对图片消息这类与估算值差异大的条目尤其关键）。
-        /// 仅改写未测量条目；已实测条目不受影响。若列表原本停在底部，应用后保持贴底。
+        /// v1.2.3：同时纠错"创建帧的陈旧宽度测量"——条目刚实例化时 Canvas 布局未发生，
+        /// rect.width 是池对象/prefab 的陈旧值，实测可能写入错误高度并标记 IsMeasured；
+        /// Provider 值基于真实布局指纹，是更高权威，差异超过阈值时覆盖。
         /// </summary>
         public void ApplyProviderHeights(int fromIndex, int toIndexInclusive)
         {
             if (_cachedHeightGetter == null || _state.Status != SVListStatus.Running) return;
+
+            const float overrideThreshold = 8f;
 
             int max = _state.TotalCount - 1;
             int from = Mathf.Max(0, fromIndex);
@@ -598,10 +612,13 @@ namespace SVList
             for (int i = from; i <= to; i++)
             {
                 var info = _heightCache.GetInfo(i);
-                if (info == null || info.IsMeasured) continue; // 只补估算条目
+                if (info == null) continue;
 
                 float provided = _cachedHeightGetter(i);
                 if (provided <= 0f) continue;
+
+                if (info.IsMeasured && Mathf.Abs(provided - _heightCache.GetHeight(i)) <= overrideThreshold)
+                    continue; // 已有正确的测量值
 
                 _heightCache.UpdateHeight(i, provided);
                 changed = true;
