@@ -45,24 +45,27 @@ namespace SVList
 
         public SVHeightProbe(Transform parent) => _parent = parent;
 
-        /// <summary>从实例化后的真实 Item 上采集模板参数（每个模板首次实例化时调用；重复调用刷新）。</summary>
-        public void Capture(ISVItemRenderer renderer, int prefabId)
+        /// <summary>从实例化后的真实 Item 上采集模板参数。
+        /// 条目刚创建时 Canvas 布局可能尚未 rebuild（rect.width=0），此时返回 false，
+        /// 调用方应下一帧重试（见 SVAutoHeightProvider.Tick）。</summary>
+        public bool Capture(ISVItemRenderer renderer, int prefabId)
         {
-            if (!(renderer is Component comp)) return;
+            if (!(renderer is Component comp)) return false;
 
             var info = GetInfo(prefabId);
-            var dynamicText = FindLargestText(comp);
+            var dynamicText = FindDynamicText(comp);
             float instanceHeight = renderer.GetPreferredHeight();
 
             if (dynamicText == null || instanceHeight <= 0f)
             {
-                info.FixedHeight = Mathf.Max(instanceHeight, 0f); // 无动态文本：固定高度模板
+                // 无动态文本：固定高度模板（图片消息等）
+                info.FixedHeight = Mathf.Max(instanceHeight, 0f);
                 info.Ready = info.FixedHeight > 0f;
-                return;
+                return info.Ready;
             }
 
             float textWidth = dynamicText.rectTransform.rect.width;
-            if (textWidth <= 0f) return; // 布局未就绪，留待下次实例化再采
+            if (textWidth <= 0f) return false; // 布局未就绪：留待下一帧重试
 
             info.Font = dynamicText.font;
             info.FontSize = dynamicText.enableAutoSizing ? dynamicText.fontSizeMax : dynamicText.fontSize;
@@ -77,6 +80,7 @@ namespace SVList
             info.Fingerprint = SVLayoutFingerprint.Create(
                 FontGuid(info.Font), info.FontSize, info.Width, info.RichText, info.WordWrap, info.FixedDelta);
             info.Ready = true;
+            return true;
         }
 
         public bool IsReady(int prefabId)
@@ -111,18 +115,35 @@ namespace SVList
         private TemplateInfo GetInfo(int prefabId)
             => _templates.TryGetValue(prefabId, out var i) ? i : (_templates[prefabId] = new TemplateInfo());
 
-        /// <summary>启发式：矩形面积最大的 TMP = 动态文本（消息正文）。</summary>
-        private static TMP_Text FindLargestText(Component root)
+        /// <summary>已就绪的模板数量（供增量触发精确高度灌入）。</summary>
+        public int ReadyCount
         {
-            TMP_Text best = null;
-            float bestArea = 0f;
+            get
+            {
+                int n = 0;
+                foreach (var t in _templates.Values) if (t.Ready) n++;
+                return n;
+            }
+        }
+
+        /// <summary>启发式定位动态文本：优先"垂直锚拉伸的 TMP"（高度随内容变的那个，
+        /// 如气泡正文），取其中面积最大者；全部为固定锚（如图片消息只有顶部名字行）
+        /// 则视为无动态文本 → 固定高度模板。</summary>
+        private static TMP_Text FindDynamicText(Component root)
+        {
+            TMP_Text bestStretched = null; float bestStretchedArea = 0f;
+            TMP_Text bestAny = null; float bestAnyArea = 0f;
             foreach (var t in root.GetComponentsInChildren<TMP_Text>(true))
             {
+                var ra = t.rectTransform.anchorMin;
+                var rb = t.rectTransform.anchorMax;
+                bool vStretch = Mathf.Abs(rb.y - ra.y) > 0.01f;
                 var r = t.rectTransform.rect;
-                float area = r.width * r.height;
-                if (area > bestArea) { bestArea = area; best = t; }
+                float area = Mathf.Max(r.width * r.height, 1f);
+                if (area > bestAnyArea) { bestAnyArea = area; bestAny = t; }
+                if (vStretch && area > bestStretchedArea) { bestStretchedArea = area; bestStretched = t; }
             }
-            return best;
+            return bestStretched; // 无拉伸 TMP → null → 固定高度模板
         }
 
         private static string FontGuid(TMP_FontAsset font)

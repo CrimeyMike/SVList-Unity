@@ -2,6 +2,14 @@
 
 All notable changes to SVList will be documented in this file.
 
+## [1.2.1] - 2026-10-28
+
+### Fixed
+- **Scrolling jitter when scrolling up through not-yet-measured items** (strong with image messages, whose exact height differs ~200px from the estimate): the layout's height cache is now back-filled with exact provider heights as soon as each template's fingerprint is ready. `Initialize` always runs before the first item exists, so the initial pass used to fall back to estimates for everything and every item corrected itself during scrolling
+- Probe capture retries on the next frame: an item's `rect.width` is 0 in the frame it was created (canvas layout has not run yet), which used to make capture fail indefinitely
+- Multi-template timing: the back-fill triggers once per newly-ready template (text vs image templates become ready on different frames) instead of only once
+- Image-message templates are now correctly detected as fixed-height items: the dynamic-text heuristic requires a vertically-stretched TMP, so a header name row no longer gets mistaken for the body text
+
 ## [1.2.0] - 2026-10-27
 
 ### Added

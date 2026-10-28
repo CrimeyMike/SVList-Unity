@@ -271,6 +271,10 @@ namespace SVList
         {
             if (_core != null && _core.IsInitialized)
             {
+                // v1.2.0：驱动自校准采集的重试/灌入（布局未就绪的采集下帧补采）
+                if (_core.HeightProvider is ISVTemplateCapture capture)
+                    capture.Tick();
+
                 _core.LateUpdate();
                 _profiler?.Update();
             }

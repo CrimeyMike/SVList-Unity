@@ -577,6 +577,51 @@ namespace SVList
         }
 
         /// <summary>
+        /// Provider 高度批量应用（v1.2.0 自校准：探针就绪后把仍是估算的条目替换为精确高度）。
+        /// Initialize 时 Provider 往往未就绪（探针依赖首个条目实例化），导致精确值错过
+        /// HeightCache 的全量初始化——本方法在就绪后补灌，消除"估算→实测修正"的
+        /// 滚动跳变（对图片消息这类与估算值差异大的条目尤其关键）。
+        /// 仅改写未测量条目；已实测条目不受影响。若列表原本停在底部，应用后保持贴底。
+        /// </summary>
+        public void ApplyProviderHeights(int fromIndex, int toIndexInclusive)
+        {
+            if (_cachedHeightGetter == null || _state.Status != SVListStatus.Running) return;
+
+            int max = _state.TotalCount - 1;
+            int from = Mathf.Max(0, fromIndex);
+            int to = Mathf.Min(toIndexInclusive, max);
+            if (from > to) return;
+
+            bool atBottom = _state.ScrollOffset >= MaxScrollOffset - 50f;
+            bool changed = false;
+
+            for (int i = from; i <= to; i++)
+            {
+                var info = _heightCache.GetInfo(i);
+                if (info == null || info.IsMeasured) continue; // 只补估算条目
+
+                float provided = _cachedHeightGetter(i);
+                if (provided <= 0f) continue;
+
+                _heightCache.UpdateHeight(i, provided);
+                changed = true;
+
+                // 屏上活跃条目同步根高度
+                if (_itemContainer.TryGet(i, out ActiveItem it) && it.Rect != null)
+                    it.Rect.sizeDelta = new Vector2(it.Rect.sizeDelta.x, provided);
+            }
+
+            if (!changed) return;
+
+            UpdatePositionsFrom(from);
+            _state.Dirty = true;
+            UpdateContentSize();
+
+            if (atBottom && MaxScrollOffset > 0f)
+                ApplyScrollOffset(MaxScrollOffset, true);
+        }
+
+        /// <summary>
         /// 锚点补偿：高度变化后保持视觉稳定
         /// </summary>
         private void CompensateAnchor(int changedIndex, float delta)

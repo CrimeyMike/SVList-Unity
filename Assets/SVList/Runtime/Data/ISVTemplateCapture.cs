@@ -7,7 +7,12 @@ namespace SVList
     /// </summary>
     public interface ISVTemplateCapture
     {
-        /// <summary>renderer：刚实例化的 Item；prefabId：其模板编号。</summary>
+        /// <summary>renderer：刚实例化的 Item；prefabId：其模板编号。
+        /// 返回后条目可能因布局未完成而暂不可采集，采集方应在 Tick 中重试。</summary>
         void OnItemInstantiated(ISVItemRenderer renderer, int prefabId);
+
+        /// <summary>每帧驱动（View.LateUpdate 调用）：重试因布局未就绪而失败的采集，
+        /// 并在探针就绪后执行预热补跑与精确高度灌入。</summary>
+        void Tick();
     }
 }
