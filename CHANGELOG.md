@@ -2,6 +2,11 @@
 
 All notable changes to SVList will be documented in this file.
 
+## [1.2.6] - 2026-10-28
+
+### Fixed
+- **The text-member heuristic measured the wrong field** (the ultimate root cause of text overflowing bubbles): preferred-name matching was case-sensitive, so a data class declaring `Text` (capital T) missed it; the fallback took "the first string member", whose order is not guaranteed at runtime — frequently landing on the sender-name field. Heights were then computed from the short name (single line) while the long body rendered two lines. Preferred matching is now case-insensitive, and among the remaining candidates the *longest current value* wins (a chat body is necessarily longer than a sender name)
+
 ## [1.2.5] - 2026-10-28
 
 ### Fixed

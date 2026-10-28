@@ -28,7 +28,7 @@ namespace SVList
         private readonly SVHeightProbe _probe;
 #endif
 
-        private readonly Dictionary<Type, MemberInfo> _textAccessors = new Dictionary<Type, MemberInfo>();
+        private readonly Dictionary<Type, MemberInfo[]> _textAccessors = new Dictionary<Type, MemberInfo[]>();
         private ISVDataSource _dataSource;
         private Func<int, int> _selector;
         private int _pendingFrom = -1, _pendingTo = -1;
@@ -175,36 +175,46 @@ namespace SVList
         private string ExtractText(object data)
         {
             var type = data.GetType();
-            if (!_textAccessors.TryGetValue(type, out var member))
-                _textAccessors[type] = member = FindTextMember(type);
-            if (member == null) return null;
+            if (!_textAccessors.TryGetValue(type, out var candidates))
+                _textAccessors[type] = candidates = FindTextMembers(type);
+            if (candidates == null || candidates.Length == 0) return null;
 
-            return member is FieldInfo f ? f.GetValue(data) as string
-                 : member is PropertyInfo p ? p.GetValue(data) as string
-                 : null;
+            // 候选中取当前值最长者：聊天正文必然长于发送者名字等短 string 成员。
+            // （字段声明顺序在运行时不保证，"第一个 string"可能拿到名字而非正文。）
+            string best = null;
+            foreach (var m in candidates)
+            {
+                var s = m is FieldInfo f ? f.GetValue(data) as string
+                     : m is PropertyInfo p ? p.GetValue(data) as string
+                     : null;
+                if (s != null && (best == null || s.Length > best.Length)) best = s;
+            }
+            return best;
         }
 
         private static readonly string[] PreferredNames = { "text", "content", "msg", "message", "body" };
 
-        private static MemberInfo FindTextMember(Type t)
+        /// <summary>返回候选文本成员：优先名（忽略大小写）匹配的在前，其余 string 成员殿后。</summary>
+        private static MemberInfo[] FindTextMembers(Type t)
         {
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
 
+            var preferred = new System.Collections.Generic.List<MemberInfo>();
             foreach (var name in PreferredNames)
             {
                 var f = t.GetField(name, flags);
-                if (f != null && f.FieldType == typeof(string)) return f;
+                if (f != null && f.FieldType == typeof(string)) preferred.Add(f);
                 var p = t.GetProperty(name, flags);
-                if (p != null && p.PropertyType == typeof(string) && p.CanRead) return p;
+                if (p != null && p.PropertyType == typeof(string) && p.CanRead) preferred.Add(p);
             }
+            if (preferred.Count > 0) return preferred.ToArray();
 
-            foreach (var f in t.GetFields(flags))
-                if (f.FieldType == typeof(string)) return f;
-
-            foreach (var p in t.GetProperties(flags))
-                if (p.PropertyType == typeof(string) && p.CanRead) return p;
-
-            return null;
+            var all = new System.Collections.Generic.List<MemberInfo>();
+            foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.Instance))
+                if (f.FieldType == typeof(string)) all.Add(f);
+            foreach (var p in t.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                if (p.PropertyType == typeof(string) && p.CanRead) all.Add(p);
+            return all.ToArray();
         }
     }
 }
