@@ -38,8 +38,8 @@ namespace SVList.EditorTools
         private bool _showBounds = true;
         private bool _showHeights = true;
 
-        // 内嵌 Inspector
-        private Editor _cachedInspector;
+        // 内嵌 Inspector(注意:本命名空间下裸 Editor 会解析到 SVList.Editor 命名空间,必须全称)
+        private UnityEditor.Editor _cachedInspector;
         private UObject _cachedInspectorTarget;
 
         // 刷新节流
@@ -448,7 +448,7 @@ namespace SVList.EditorTools
             if (target == _cachedInspectorTarget && _cachedInspector != null) return;
             _cachedInspectorTarget = target;
             if (target != null)
-                Editor.CreateCachedEditor(target, null, ref _cachedInspector);
+                UnityEditor.Editor.CreateCachedEditor(target, null, ref _cachedInspector);
             else _cachedInspector = null;
         }
 
