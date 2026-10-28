@@ -6,11 +6,6 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Status](https://img.shields.io/badge/status-production--ready-green)
 
-![Chat demo](.github/assets/chat-demo-middle.png)
-
-> 上图:ChatListTemplate 开箱即用模板(不等高中英文消息 + 图片消息双模板,Play 直拍)。
-> The shot above: the out-of-the-box chat template (variable-height messages + image messages, captured in Play mode).
-
 ## 目录 / Table of Contents
 
 - [概述 / Overview](#概述--overview)

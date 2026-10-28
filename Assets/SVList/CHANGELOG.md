@@ -2,6 +2,11 @@
 
 All notable changes to SVList will be documented in this file.
 
+## [1.2.1] - 2026-10-28
+
+### Fixed
+- **Chat bubble exceeded the item bounds on panels narrower than the 1080 design width**: the bubble used a hard-coded width anchored to the root's edge. It is now clamped to `min(design width, root width - side margins)` via a responsive `OnRectTransformDimensionsChange` callback — runtime-only, the prefab's static layout stays authoritative (wide panels keep the designed width; narrow panels shrink the bubble to fit)
+
 ## [1.2.0] - 2026-10-28
 
 ### Added

@@ -24,6 +24,7 @@ namespace SVList.Examples
     {
         public const float BubbleWidth = 792f;
         public const float TextWidth = BubbleWidth - 32f;   // 气泡左右各 16 内边距
+        public const float BubbleSideMargin = 24f;          // 气泡距 Item 根左右边缘（响应式钳制用）
         public const float NameRowHeight = 44f;
         public const float VerticalPadding = 20f;
         public const float MinHeight = 72f;

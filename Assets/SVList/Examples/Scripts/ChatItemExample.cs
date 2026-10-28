@@ -37,6 +37,29 @@ namespace SVList.Examples
         }
 
         /// <summary>
+        /// 响应式宽度钳制：气泡宽 = min(设计宽, 根宽 − 左右边距)。
+        /// 面板与 1080 参考宽一致时保持设计宽（不满宽、留右侧空隙）；
+        /// 面板更窄时气泡自动收缩，不再超出 Item 根的框选范围。
+        /// 仅运行时回调（不写 [ExecuteAlways]，prefab 静态值不受影响），
+        /// 属于响应式约束而非布局拼装 —— prefab 静态布局仍是权威。
+        /// </summary>
+        private void OnRectTransformDimensionsChange()
+        {
+            if (BubbleRect == null) return;
+            var root = transform as RectTransform;
+            if (root == null) return;
+            float rootW = root.rect.width;
+            if (rootW <= 0f) return; // 布局未就绪
+
+            float maxW = rootW - ChatExampleMetrics.BubbleSideMargin * 2f;
+            if (maxW <= 0f) return;
+
+            float w = Mathf.Min(ChatExampleMetrics.BubbleWidth, maxW);
+            if (Mathf.Abs(BubbleRect.sizeDelta.x - w) > 0.5f)
+                BubbleRect.sizeDelta = new Vector2(w, BubbleRect.sizeDelta.y);
+        }
+
+        /// <summary>
         /// 兜底测量（AutoMeasure / Provider 未生效时使用；宽度读实例真实值，Inspector 改宽度自动跟随）。
         /// v1.2.0 自校准高度开启时，Provider 已给出精确高度，本方法不会在滚动热路径被调用。
         /// 注意：条目创建帧 Canvas 布局尚未发生（rect.width=0），此时返回 0 放弃测量 ——
