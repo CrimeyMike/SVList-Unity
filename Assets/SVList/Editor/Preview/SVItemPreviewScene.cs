@@ -35,6 +35,7 @@ namespace SVList.EditorTools
         private readonly List<ItemInfo> _items = new List<ItemInfo>();
 
         private const int RtWidth = 560;
+        private const float CanvasHeight = 800f;
 
         public RenderTexture Texture => _rt;
         public IReadOnlyList<ItemInfo> Items => _items;
@@ -57,8 +58,11 @@ namespace SVList.EditorTools
             _canvas.additionalShaderChannels = AdditionalCanvasShaderChannels.TexCoord1;
 
             var rt = canvasGo.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(RtWidth, 800f);
-            rt.position = Vector3.zero;
+            rt.sizeDelta = new Vector2(RtWidth, CanvasHeight);
+            // 顶边对齐 y=0:条目从画布顶锚(y=0)向下生长到负值,
+            // Render() 的相机视野 y∈[-worldH,0] 才能恒覆盖内容带。
+            // (此前画布中心在原点、内容悬在 y>0 上半区,短内容整条漏出相机视野→画布空白)
+            rt.position = new Vector3(0f, -CanvasHeight * 0.5f, 0f);
             _stack = rt;
         }
 

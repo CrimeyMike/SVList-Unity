@@ -396,7 +396,17 @@ namespace SVList.EditorTools
                 {
                     EditorGUI.BeginChangeCheck();
                     try { _cachedInspector.OnInspectorGUI(); }
-                    catch (System.Exception) { _cachedInspector = null; _cachedInspectorTarget = null; }
+                    catch (ExitGUIException) { throw; }
+                    catch (System.Exception e)
+                    {
+                        // 异常可能发生在内嵌 Inspector 已压入 GUIClip 之后(如 Odin 接管时),
+                        // 若静默吞掉继续跑会留下不平衡的 clip 栈(GUI Error: pushing more GUIClips
+                        // than popping)。记录原始异常并干净放弃本事件,下一事件自动恢复平衡。
+                        _cachedInspector = null;
+                        _cachedInspectorTarget = null;
+                        Debug.LogException(e);
+                        GUIUtility.ExitGUI();
+                    }
                     if (EditorGUI.EndChangeCheck()) Rebuild();
 
                     if (GUILayout.Button("将组件值写回 prefab"))
