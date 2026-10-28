@@ -162,6 +162,8 @@ namespace SVList.EditorTools
         public void Dispose()
         {
             ClearItems();
+            // 与 Render() 同规矩:先解绑再释放,避免 "Releasing render texture that is set as Camera.targetTexture!"
+            if (_camera != null) _camera.targetTexture = null;
             if (_rt != null) { _rt.Release(); Object.DestroyImmediate(_rt); _rt = null; }
             if (_canvas != null) Object.DestroyImmediate(_canvas.gameObject);
             if (_camera != null) Object.DestroyImmediate(_camera.gameObject);
