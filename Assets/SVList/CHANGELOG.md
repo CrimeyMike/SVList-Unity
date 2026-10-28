@@ -2,6 +2,11 @@
 
 All notable changes to SVList will be documented in this file.
 
+## [1.2.5] - 2026-10-28
+
+### Fixed
+- **Stale entries in the persistent height cache resurrecting on matching fingerprints**: users upgrading through 1.2.1–1.2.4 carry cache files with single-line heights written under the stale-width regime; when a panel's real wrap width happens to equal the stale fingerprint width, those keys hit again (and the reconciliation layer sees provider == current, so it doesn't correct). The content key now carries a cache-schema salt ("v2"), invalidating every historical entry at once — old entries age out of the LRU naturally
+
 ## [1.2.4] - 2026-10-28
 
 ### Fixed

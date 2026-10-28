@@ -57,8 +57,10 @@ namespace SVList
             return h & 0x7FFF_FFFF_FFFF_FFFFUL;
         }
 
-        /// <summary>内容键：同一布局指纹下，不同文本得到不同键（文本原文参与哈希）。</summary>
-        public ulong ContentKey(string text) => Fnv1a64(Hash.ToString("X") + '|' + text);
+        /// <summary>内容键：同一布局指纹下，不同文本得到不同键（文本原文参与哈希）。
+        /// 盐 "v2"：高度缓存模式版本——测量逻辑行为变化时递增，使历史缓存文件中的
+        /// 全部旧键自然失效（v1→v2：废弃"陈旧宽度时代"写入的脏高度）。</summary>
+        public ulong ContentKey(string text) => Fnv1a64(Hash.ToString("X") + "|v2|" + (text ?? string.Empty));
 
         public bool Equals(SVLayoutFingerprint other) => Hash == other.Hash;
         public override bool Equals(object obj) => obj is SVLayoutFingerprint f && Equals(f);
