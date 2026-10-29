@@ -6,6 +6,11 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Status](https://img.shields.io/badge/status-production--ready-green)
 
+![cover](.github/assets/cover.png)
+
+> 封面素材来自游戏《明日方舟》（开发商：鹰角网络 Hypergryph），版权归原作者方所有，非原创，仅作界面演示。
+> Cover art is from the game *Arknights* (© Hypergryph), not original work — used here for illustration only; all rights belong to its owner.
+
 ## 目录 / Table of Contents
 
 - [概述 / Overview](#概述--overview)
